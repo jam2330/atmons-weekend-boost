@@ -1,170 +1,42 @@
 package com.jam2330.weekendboost;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.MinecraftServer;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+public class WeekendBoostConfig {
 
-import java.nio.file.Path;
-import java.util.Calendar;
+    // Tick intervals
+    public static final int CHECK_INTERVAL_TICKS    = 1200;
+    public static final int ANNOUNCE_INTERVAL_TICKS = 432000;
 
-public class WeekendBoostEvents {
+    // Weekday values
+    public static final double NORMAL_SHINY_RATE        = 8192.0;
+    public static final double NORMAL_POKEMON_PER_CHUNK = 1.0;
+    public static final int    NORMAL_MAX_SPAWNS        = 8;
+    public static final double NORMAL_EXP_MULTIPLIER    = 2.0;
+    public static final double NORMAL_LUCKY_EGG         = 1.5;
+    public static final double NORMAL_COMMON_WEIGHT     = 94.3;
+    public static final double NORMAL_UNCOMMON_WEIGHT   = 5.0;
+    public static final double NORMAL_RARE_WEIGHT       = 0.5;
+    public static final double NORMAL_ULTRA_RARE_WEIGHT = 0.2;
 
-    private boolean weekendBoostActive = false;
-    private int ticksSinceLastAnnounce = 0;
+    // Weekend values
+    public static final double WEEKEND_SHINY_RATE        = 2048.0;
+    public static final double WEEKEND_POKEMON_PER_CHUNK = 3.0;
+    public static final int    WEEKEND_MAX_SPAWNS        = 16;
+    public static final double WEEKEND_EXP_MULTIPLIER    = 4.0;
+    public static final double WEEKEND_LUCKY_EGG         = 3.0;
+    public static final double WEEKEND_COMMON_WEIGHT     = 75.0;
+    public static final double WEEKEND_UNCOMMON_WEIGHT   = 12.0;
+    public static final double WEEKEND_RARE_WEIGHT       = 8.0;
+    public static final double WEEKEND_ULTRA_RARE_WEIGHT = 5.0;
 
-    @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
-        WeekendBoost.LOGGER.info("Weekend Boost: onServerStarting fired!");
-        Path configDir = Path.of("config");
-        boolean isWeekend = isWeekend();
-        weekendBoostActive = isWeekend;
-
-        if (isWeekend) {
-            WeekendBoost.LOGGER.info("Weekend Boost: It's the weekend! Applying boosted config...");
-            ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.WEEKEND_COMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_RARE_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_ULTRA_RARE_WEIGHT
-                )
-            );
-            ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.WEEKEND_SHINY_RATE,
-                WeekendBoostConfig.WEEKEND_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.WEEKEND_MAX_SPAWNS,
-                WeekendBoostConfig.WEEKEND_EXP_MULTIPLIER,
-                WeekendBoostConfig.WEEKEND_LUCKY_EGG
-            );
-        } else {
-            WeekendBoost.LOGGER.info("Weekend Boost: Weekday. Applying normal config...");
-            ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.NORMAL_COMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_RARE_WEIGHT,
-                    WeekendBoostConfig.NORMAL_ULTRA_RARE_WEIGHT
-                )
-            );
-            ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.NORMAL_SHINY_RATE,
-                WeekendBoostConfig.NORMAL_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.NORMAL_MAX_SPAWNS,
-                WeekendBoostConfig.NORMAL_EXP_MULTIPLIER,
-                WeekendBoostConfig.NORMAL_LUCKY_EGG
-            );
-        }
-    }
-
-    @SubscribeEvent
-    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (weekendBoostActive) {
-            sendBoostMessage(event.getEntity());
-        }
-    }
-
-    @SubscribeEvent
-    public void onServerTick(ServerTickEvent.Post event) {
-        MinecraftServer server = event.getServer();
-        long ticks = server.getTickCount();
-        if (ticks % WeekendBoostConfig.CHECK_INTERVAL_TICKS != 0) return;
-
-        boolean isWeekend = isWeekend();
-        boolean wasActive = weekendBoostActive;
-        weekendBoostActive = isWeekend;
-
-        Path configDir = Path.of("config");
-
-        if (isWeekend && !wasActive) {
-            ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.WEEKEND_COMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_RARE_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_ULTRA_RARE_WEIGHT
-                )
-            );
-            ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.WEEKEND_SHINY_RATE,
-                WeekendBoostConfig.WEEKEND_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.WEEKEND_MAX_SPAWNS,
-                WeekendBoostConfig.WEEKEND_EXP_MULTIPLIER,
-                WeekendBoostConfig.WEEKEND_LUCKY_EGG
-            );
-            broadcastBoostMessage(server);
-            ticksSinceLastAnnounce = 0;
-        }
-
-        if (isWeekend && wasActive) {
-            ticksSinceLastAnnounce += WeekendBoostConfig.CHECK_INTERVAL_TICKS;
-            if (ticksSinceLastAnnounce >= WeekendBoostConfig.ANNOUNCE_INTERVAL_TICKS) {
-                broadcastBoostMessage(server);
-                ticksSinceLastAnnounce = 0;
-            }
-        }
-
-        if (!isWeekend && wasActive) {
-            ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.NORMAL_COMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_RARE_WEIGHT,
-                    WeekendBoostConfig.NORMAL_ULTRA_RARE_WEIGHT
-                )
-            );
-            ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.NORMAL_SHINY_RATE,
-                WeekendBoostConfig.NORMAL_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.NORMAL_MAX_SPAWNS,
-                WeekendBoostConfig.NORMAL_EXP_MULTIPLIER,
-                WeekendBoostConfig.NORMAL_LUCKY_EGG
-            );
-            server.getPlayerList().getPlayers().forEach(p ->
-                p.sendSystemMessage(
-                    Component.literal("[ ")
-                        .append(Component.literal("Weekend Boost")
-                            .withStyle(s -> s.withColor(0xFFAA00).withBold(true)))
-                        .append(Component.literal(" ] "))
-                        .append(Component.literal(
-                            "The weekend boost has ended. Normal rates resume on next restart."))
-                )
-            );
-            ticksSinceLastAnnounce = 0;
-        }
-    }
-
-    private boolean isWeekend() {
-        int day = Calendar.getInstance().get(Calendar.DAY_OF_WEEK);
-        return day == Calendar.SATURDAY || day == Calendar.SUNDAY;
-    }
-
-    private void sendBoostMessage(net.minecraft.world.entity.player.Player player) {
-        player.sendSystemMessage(Component.literal(""));
-        player.sendSystemMessage(
-            Component.literal("  \u2728 ")
-                .append(Component.literal("WEEKEND BOOST")
-                    .withStyle(s -> s.withColor(0x55FFFF).withBold(true)))
-                .append(Component.literal(" IS ACTIVE! \u2728")
-                    .withStyle(s -> s.withColor(0xFFFF55)))
-        );
-        player.sendSystemMessage(
-            Component.literal("  All Pok\u00e9mon spawn rates, shiny chances, and EXP")
-                .withStyle(s -> s.withColor(0xAAAAAA))
-        );
-        player.sendSystemMessage(
-            Component.literal("  boosted by a minimum ")
-                .withStyle(s -> s.withColor(0xAAAAAA))
-                .append(Component.literal("x2").withStyle(s -> s.withColor(0x55FF55).withBold(true)))
-                .append(Component.literal(" this weekend. Good luck! \uD83C\uDF1F")
-                    .withStyle(s -> s.withColor(0xAAAAAA)))
-        );
-        player.sendSystemMessage(Component.literal(""));
-    }
-
-    private void broadcastBoostMessage(MinecraftServer server) {
-        server.getPlayerList().getPlayers().forEach(this::sendBoostMessage);
+    public static String buildSpawnerConfig(double common, double uncommon,
+                                            double rare, double ultraRare) {
+        return "{\"version\":1,\"replaceWithNewVersion\":false," +
+            "\"spawnablePositionTypeWeights\":{\"grounded\":1.0,\"submerged\":1.0,\"surface\":1.0}," +
+            "\"buckets\":[" +
+            "{\"name\":\"common\",\"weight\":" + common + "}," +
+            "{\"name\":\"uncommon\",\"weight\":" + uncommon + "}," +
+            "{\"name\":\"rare\",\"weight\":" + rare + "}," +
+            "{\"name\":\"ultra-rare\",\"weight\":" + ultraRare + "}" +
+            "]}";
     }
 }

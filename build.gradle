@@ -12,17 +12,22 @@ base {
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
 }
 
 neoForge {
     version = '21.1.226'
-
-    runs {
-        server {
-            server()
-            ideName = 'Server'
-        }
-    }
 
     mods {
         weekendboost {
@@ -33,16 +38,20 @@ neoForge {
 
 repositories {
     mavenCentral()
+    maven { url = 'https://maven.neoforged.net/releases' }
 }
 
 dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1'
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:all'
 }
 
 jar {
+    from sourceSets.main.output
     manifest {
         attributes([
             'Specification-Title'     : 'weekendboost',

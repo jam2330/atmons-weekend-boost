@@ -17,6 +17,9 @@ public class WeekendBoostEvents {
     private int ticksSinceLastAnnounce = 0;
     private int weekdayTicksSinceLastAnnounce = 0;
 
+    // ============================================================
+    // Runs before server starts - writes spawner config
+    // ============================================================
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         WeekendBoost.LOGGER.info("Weekend Boost: onServerStarting fired!");
@@ -48,6 +51,9 @@ public class WeekendBoostEvents {
         }
     }
 
+    // ============================================================
+    // Runs after server fully started - writes main.json
+    // ============================================================
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
         WeekendBoost.LOGGER.info("Weekend Boost: onServerStarted fired — applying main.json now");
@@ -74,6 +80,9 @@ public class WeekendBoostEvents {
         }
     }
 
+    // ============================================================
+    // Send announcement when player logs in (delayed 5 seconds)
+    // ============================================================
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         net.minecraft.server.level.ServerPlayer serverPlayer =
@@ -83,16 +92,19 @@ public class WeekendBoostEvents {
                 serverPlayer.getServer().getTickCount() + 100,
                 () -> {
                     if (weekendBoostActive) {
-                        sendBoostMessage(serverPlayer);
+                        sendBoostMessage(serverPlayer, true);
                         sendBoostTitle(serverPlayer);
                     } else {
-                        sendNormalMessage(serverPlayer);
+                        sendNormalMessage(serverPlayer, true);
                     }
                 }
             )
         );
     }
 
+    // ============================================================
+    // Tick loop - handles re-announcements and day switchovers
+    // ============================================================
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
@@ -127,7 +139,7 @@ public class WeekendBoostEvents {
             weekdayTicksSinceLastAnnounce = 0;
         }
 
-        // Weekend active - re-announce every 6 hours with ding
+        // Weekend active - re-announce every 6 hours with XP orb ding
         if (isWeekend && wasActive) {
             ticksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
             if (ticksSinceLastAnnounce >= ModConfig.ANNOUNCE_INTERVAL_TICKS) {
@@ -136,11 +148,11 @@ public class WeekendBoostEvents {
             }
         }
 
-        // Weekday active - re-announce every 8 hours, no ding
-        if (!isWeekend && !(!isWeekend && wasActive)) {
+        // Weekday active - re-announce every 8 hours with toast sound, no ding
+        if (!isWeekend && wasActive == false) {
             weekdayTicksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
             if (weekdayTicksSinceLastAnnounce >= ModConfig.WEEKDAY_ANNOUNCE_TICKS) {
-                server.getPlayerList().getPlayers().forEach(this::sendNormalMessage);
+                server.getPlayerList().getPlayers().forEach(p -> sendNormalMessage(p, false));
                 weekdayTicksSinceLastAnnounce = 0;
             }
         }
@@ -162,16 +174,24 @@ public class WeekendBoostEvents {
                 ModConfig.NORMAL_EXP_MULTIPLIER,
                 ModConfig.NORMAL_LUCKY_EGG
             );
-            server.getPlayerList().getPlayers().forEach(p ->
+            server.getPlayerList().getPlayers().forEach(p -> {
+                p.sendSystemMessage(Component.literal(""));
                 p.sendSystemMessage(
-                    Component.literal("[ ")
+                    Component.literal("  [ ")
                         .append(Component.literal("Weekend Boost")
                             .withStyle(s -> s.withColor(0xFFAA00).withBold(true)))
                         .append(Component.literal(" ] "))
                         .append(Component.literal(
-                            "The weekend boost has ended. Normal rates resume on next restart."))
-                )
-            );
+                            "The weekend boost has ended. Normal rates resume on next restart.")
+                            .withStyle(s -> s.withColor(0xAAAAAA)))
+                );
+                p.sendSystemMessage(Component.literal(""));
+                p.playNotifySound(
+                    net.minecraft.sounds.SoundEvents.FIREWORK_ROCKET_LAUNCH,
+                    net.minecraft.sounds.SoundSource.MASTER,
+                    1.0f, 1.0f
+                );
+            });
             ticksSinceLastAnnounce = 0;
             weekdayTicksSinceLastAnnounce = 0;
         }
@@ -190,7 +210,6 @@ public class WeekendBoostEvents {
         Calendar next = (Calendar) now.clone();
         int day = now.get(Calendar.DAY_OF_WEEK);
 
-        // Days until Saturday
         int daysUntilSaturday = (Calendar.SATURDAY - day + 7) % 7;
         if (daysUntilSaturday == 0) daysUntilSaturday = 7;
 
@@ -200,7 +219,7 @@ public class WeekendBoostEvents {
         next.set(Calendar.SECOND, 0);
         next.set(Calendar.MILLISECOND, 0);
 
-        long diffMs = next.getTimeInMillis() - now.getTimeInMillis();
+        long diffMs  = next.getTimeInMillis() - now.getTimeInMillis();
         long hours   = diffMs / (1000 * 60 * 60);
         long minutes = (diffMs % (1000 * 60 * 60)) / (1000 * 60);
 
@@ -212,7 +231,8 @@ public class WeekendBoostEvents {
         return hours + "h " + minutes + "m";
     }
 
-    private void sendBoostMessage(net.minecraft.world.entity.player.Player player) {
+    // Weekend message - isLogin true = levelup sound, false = XP orb sound
+    private void sendBoostMessage(net.minecraft.world.entity.player.Player player, boolean isLogin) {
         player.sendSystemMessage(Component.literal(""));
         player.sendSystemMessage(
             Component.literal("  \u2728 ")
@@ -234,17 +254,19 @@ public class WeekendBoostEvents {
         );
         player.sendSystemMessage(Component.literal(""));
 
-        // Ding sound
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             serverPlayer.playNotifySound(
-                net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP,
+                isLogin
+                    ? net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP
+                    : net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP,
                 net.minecraft.sounds.SoundSource.MASTER,
                 1.0f, 1.0f
             );
         }
     }
 
-    private void sendNormalMessage(net.minecraft.world.entity.player.Player player) {
+    // Weekday message - isLogin true = pling sound, false = toast sound
+    private void sendNormalMessage(net.minecraft.world.entity.player.Player player, boolean isLogin) {
         String countdown = getCountdownToWeekend();
         player.sendSystemMessage(Component.literal(""));
         player.sendSystemMessage(
@@ -265,6 +287,16 @@ public class WeekendBoostEvents {
                     .withStyle(s -> s.withColor(0x55FF55).withBold(true)))
         );
         player.sendSystemMessage(Component.literal(""));
+
+        if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            serverPlayer.playNotifySound(
+                isLogin
+                    ? net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.value()
+                    : net.minecraft.sounds.SoundEvents.UI_TOAST_IN,
+                net.minecraft.sounds.SoundSource.MASTER,
+                1.0f, 1.0f
+            );
+        }
     }
 
     private void sendBoostTitle(net.minecraft.server.level.ServerPlayer player) {
@@ -282,6 +314,6 @@ public class WeekendBoostEvents {
     }
 
     private void broadcastBoostMessage(MinecraftServer server) {
-        server.getPlayerList().getPlayers().forEach(this::sendBoostMessage);
+        server.getPlayerList().getPlayers().forEach(p -> sendBoostMessage(p, false));
     }
 }

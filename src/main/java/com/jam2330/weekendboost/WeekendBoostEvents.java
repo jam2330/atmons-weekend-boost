@@ -15,10 +15,12 @@ public class WeekendBoostEvents {
 
     private boolean weekendBoostActive = false;
     private int ticksSinceLastAnnounce = 0;
+    private int weekdayTicksSinceLastAnnounce = 0;
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         WeekendBoost.LOGGER.info("Weekend Boost: onServerStarting fired!");
+        ModConfig.loadOrCreate();
         Path configDir = Path.of("config");
         boolean isWeekend = isWeekend();
         weekendBoostActive = isWeekend;
@@ -26,21 +28,21 @@ public class WeekendBoostEvents {
         if (isWeekend) {
             WeekendBoost.LOGGER.info("Weekend Boost: It's the weekend! Applying boosted spawner config...");
             ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.WEEKEND_COMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_RARE_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_ULTRA_RARE_WEIGHT
+                ModConfig.buildSpawnerConfig(
+                    ModConfig.WEEKEND_COMMON_WEIGHT,
+                    ModConfig.WEEKEND_UNCOMMON_WEIGHT,
+                    ModConfig.WEEKEND_RARE_WEIGHT,
+                    ModConfig.WEEKEND_ULTRA_RARE_WEIGHT
                 )
             );
         } else {
             WeekendBoost.LOGGER.info("Weekend Boost: Weekday. Applying normal spawner config...");
             ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.NORMAL_COMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_RARE_WEIGHT,
-                    WeekendBoostConfig.NORMAL_ULTRA_RARE_WEIGHT
+                ModConfig.buildSpawnerConfig(
+                    ModConfig.NORMAL_COMMON_WEIGHT,
+                    ModConfig.NORMAL_UNCOMMON_WEIGHT,
+                    ModConfig.NORMAL_RARE_WEIGHT,
+                    ModConfig.NORMAL_ULTRA_RARE_WEIGHT
                 )
             );
         }
@@ -55,45 +57,47 @@ public class WeekendBoostEvents {
 
         if (isWeekend) {
             ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.WEEKEND_SHINY_RATE,
-                WeekendBoostConfig.WEEKEND_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.WEEKEND_MAX_SPAWNS,
-                WeekendBoostConfig.WEEKEND_EXP_MULTIPLIER,
-                WeekendBoostConfig.WEEKEND_LUCKY_EGG
+                ModConfig.WEEKEND_SHINY_RATE,
+                ModConfig.WEEKEND_POKEMON_PER_CHUNK,
+                ModConfig.WEEKEND_MAX_SPAWNS,
+                ModConfig.WEEKEND_EXP_MULTIPLIER,
+                ModConfig.WEEKEND_LUCKY_EGG
             );
         } else {
             ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.NORMAL_SHINY_RATE,
-                WeekendBoostConfig.NORMAL_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.NORMAL_MAX_SPAWNS,
-                WeekendBoostConfig.NORMAL_EXP_MULTIPLIER,
-                WeekendBoostConfig.NORMAL_LUCKY_EGG
+                ModConfig.NORMAL_SHINY_RATE,
+                ModConfig.NORMAL_POKEMON_PER_CHUNK,
+                ModConfig.NORMAL_MAX_SPAWNS,
+                ModConfig.NORMAL_EXP_MULTIPLIER,
+                ModConfig.NORMAL_LUCKY_EGG
             );
         }
     }
 
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (weekendBoostActive) {
-            net.minecraft.server.level.ServerPlayer serverPlayer =
-                (net.minecraft.server.level.ServerPlayer) event.getEntity();
-            serverPlayer.getServer().tell(
-                new net.minecraft.server.TickTask(
-                    serverPlayer.getServer().getTickCount() + 100,
-                    () -> {
+        net.minecraft.server.level.ServerPlayer serverPlayer =
+            (net.minecraft.server.level.ServerPlayer) event.getEntity();
+        serverPlayer.getServer().tell(
+            new net.minecraft.server.TickTask(
+                serverPlayer.getServer().getTickCount() + 100,
+                () -> {
+                    if (weekendBoostActive) {
                         sendBoostMessage(serverPlayer);
                         sendBoostTitle(serverPlayer);
+                    } else {
+                        sendNormalMessage(serverPlayer);
                     }
-                )
-            );
-        }
+                }
+            )
+        );
     }
 
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
         long ticks = server.getTickCount();
-        if (ticks % WeekendBoostConfig.CHECK_INTERVAL_TICKS != 0) return;
+        if (ticks % ModConfig.CHECK_INTERVAL_TICKS != 0) return;
 
         boolean isWeekend = isWeekend();
         boolean wasActive = weekendBoostActive;
@@ -101,49 +105,62 @@ public class WeekendBoostEvents {
 
         Path configDir = Path.of("config");
 
+        // Boost just turned ON (Friday -> Saturday)
         if (isWeekend && !wasActive) {
             ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.WEEKEND_COMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_RARE_WEIGHT,
-                    WeekendBoostConfig.WEEKEND_ULTRA_RARE_WEIGHT
+                ModConfig.buildSpawnerConfig(
+                    ModConfig.WEEKEND_COMMON_WEIGHT,
+                    ModConfig.WEEKEND_UNCOMMON_WEIGHT,
+                    ModConfig.WEEKEND_RARE_WEIGHT,
+                    ModConfig.WEEKEND_ULTRA_RARE_WEIGHT
                 )
             );
             ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.WEEKEND_SHINY_RATE,
-                WeekendBoostConfig.WEEKEND_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.WEEKEND_MAX_SPAWNS,
-                WeekendBoostConfig.WEEKEND_EXP_MULTIPLIER,
-                WeekendBoostConfig.WEEKEND_LUCKY_EGG
+                ModConfig.WEEKEND_SHINY_RATE,
+                ModConfig.WEEKEND_POKEMON_PER_CHUNK,
+                ModConfig.WEEKEND_MAX_SPAWNS,
+                ModConfig.WEEKEND_EXP_MULTIPLIER,
+                ModConfig.WEEKEND_LUCKY_EGG
             );
             broadcastBoostMessage(server);
             ticksSinceLastAnnounce = 0;
+            weekdayTicksSinceLastAnnounce = 0;
         }
 
+        // Weekend active - re-announce every 6 hours with ding
         if (isWeekend && wasActive) {
-            ticksSinceLastAnnounce += WeekendBoostConfig.CHECK_INTERVAL_TICKS;
-            if (ticksSinceLastAnnounce >= WeekendBoostConfig.ANNOUNCE_INTERVAL_TICKS) {
+            ticksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
+            if (ticksSinceLastAnnounce >= ModConfig.ANNOUNCE_INTERVAL_TICKS) {
                 broadcastBoostMessage(server);
                 ticksSinceLastAnnounce = 0;
             }
         }
 
+        // Weekday active - re-announce every 8 hours, no ding
+        if (!isWeekend && !(!isWeekend && wasActive)) {
+            weekdayTicksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
+            if (weekdayTicksSinceLastAnnounce >= ModConfig.WEEKDAY_ANNOUNCE_TICKS) {
+                server.getPlayerList().getPlayers().forEach(this::sendNormalMessage);
+                weekdayTicksSinceLastAnnounce = 0;
+            }
+        }
+
+        // Boost just turned OFF (Sunday -> Monday)
         if (!isWeekend && wasActive) {
             ConfigFileUtils.writeSpawnerConfig(configDir,
-                WeekendBoostConfig.buildSpawnerConfig(
-                    WeekendBoostConfig.NORMAL_COMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_UNCOMMON_WEIGHT,
-                    WeekendBoostConfig.NORMAL_RARE_WEIGHT,
-                    WeekendBoostConfig.NORMAL_ULTRA_RARE_WEIGHT
+                ModConfig.buildSpawnerConfig(
+                    ModConfig.NORMAL_COMMON_WEIGHT,
+                    ModConfig.NORMAL_UNCOMMON_WEIGHT,
+                    ModConfig.NORMAL_RARE_WEIGHT,
+                    ModConfig.NORMAL_ULTRA_RARE_WEIGHT
                 )
             );
             ConfigFileUtils.updateMainConfig(configDir,
-                WeekendBoostConfig.NORMAL_SHINY_RATE,
-                WeekendBoostConfig.NORMAL_POKEMON_PER_CHUNK,
-                WeekendBoostConfig.NORMAL_MAX_SPAWNS,
-                WeekendBoostConfig.NORMAL_EXP_MULTIPLIER,
-                WeekendBoostConfig.NORMAL_LUCKY_EGG
+                ModConfig.NORMAL_SHINY_RATE,
+                ModConfig.NORMAL_POKEMON_PER_CHUNK,
+                ModConfig.NORMAL_MAX_SPAWNS,
+                ModConfig.NORMAL_EXP_MULTIPLIER,
+                ModConfig.NORMAL_LUCKY_EGG
             );
             server.getPlayerList().getPlayers().forEach(p ->
                 p.sendSystemMessage(
@@ -156,12 +173,43 @@ public class WeekendBoostEvents {
                 )
             );
             ticksSinceLastAnnounce = 0;
+            weekdayTicksSinceLastAnnounce = 0;
         }
     }
 
+    // ============================================================
+    // Helpers
+    // ============================================================
     private boolean isWeekend() {
         int day = Calendar.getInstance().get(Calendar.DAY_OF_WEEK);
         return day == Calendar.SATURDAY || day == Calendar.SUNDAY;
+    }
+
+    private String getCountdownToWeekend() {
+        Calendar now = Calendar.getInstance();
+        Calendar next = (Calendar) now.clone();
+        int day = now.get(Calendar.DAY_OF_WEEK);
+
+        // Days until Saturday
+        int daysUntilSaturday = (Calendar.SATURDAY - day + 7) % 7;
+        if (daysUntilSaturday == 0) daysUntilSaturday = 7;
+
+        next.add(Calendar.DAY_OF_YEAR, daysUntilSaturday);
+        next.set(Calendar.HOUR_OF_DAY, 0);
+        next.set(Calendar.MINUTE, 0);
+        next.set(Calendar.SECOND, 0);
+        next.set(Calendar.MILLISECOND, 0);
+
+        long diffMs = next.getTimeInMillis() - now.getTimeInMillis();
+        long hours   = diffMs / (1000 * 60 * 60);
+        long minutes = (diffMs % (1000 * 60 * 60)) / (1000 * 60);
+
+        if (hours >= 24) {
+            long days = hours / 24;
+            hours = hours % 24;
+            return days + "d " + hours + "h " + minutes + "m";
+        }
+        return hours + "h " + minutes + "m";
     }
 
     private void sendBoostMessage(net.minecraft.world.entity.player.Player player) {
@@ -186,16 +234,37 @@ public class WeekendBoostEvents {
         );
         player.sendSystemMessage(Component.literal(""));
 
+        // Ding sound
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-            serverPlayer.connection.send(new net.minecraft.network.protocol.game.ClientboundSoundPacket(
-                net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.wrapAsHolder(
-                    net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP
-                ),
+            serverPlayer.playNotifySound(
+                net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP,
                 net.minecraft.sounds.SoundSource.MASTER,
-                serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
-                1.0f, 1.0f, 0L
-            ));
+                1.0f, 1.0f
+            );
         }
+    }
+
+    private void sendNormalMessage(net.minecraft.world.entity.player.Player player) {
+        String countdown = getCountdownToWeekend();
+        player.sendSystemMessage(Component.literal(""));
+        player.sendSystemMessage(
+            Component.literal("  \uD83C\uDF19 ")
+                .append(Component.literal("NO WEEKEND BOOST")
+                    .withStyle(s -> s.withColor(0xAAAAAA).withBold(true)))
+                .append(Component.literal(" \uD83C\uDF19")
+                    .withStyle(s -> s.withColor(0xAAAAAA)))
+        );
+        player.sendSystemMessage(
+            Component.literal("  Boosted rates are active on ")
+                .withStyle(s -> s.withColor(0x777777))
+                .append(Component.literal("Saturdays & Sundays")
+                    .withStyle(s -> s.withColor(0x55FFFF).withBold(true)))
+                .append(Component.literal(". Next boost in: ")
+                    .withStyle(s -> s.withColor(0x777777)))
+                .append(Component.literal(countdown)
+                    .withStyle(s -> s.withColor(0x55FF55).withBold(true)))
+        );
+        player.sendSystemMessage(Component.literal(""));
     }
 
     private void sendBoostTitle(net.minecraft.server.level.ServerPlayer player) {

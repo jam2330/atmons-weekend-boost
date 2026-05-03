@@ -43,9 +43,5 @@ public class WeekendBoostConfig {
         "{\"name\":\"ultra-rare\",\"weight\":5.0}" +
         "]}";
 
-    // ============================================================
-    // Announcement interval (6 hours in ticks)
-    // ============================================================
-    public static final int ANNOUNCE_INTERVAL_TICKS = 20 * 60 * 60 * 6;
-    public static final int CHECK_INTERVAL_TICKS    = 20 * 60; // every 60 seconds
+}
 }

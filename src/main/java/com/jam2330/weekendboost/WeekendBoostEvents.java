@@ -81,21 +81,23 @@ public class WeekendBoostEvents {
     }
 
     // ============================================================
-    // Send announcement when player logs in (delayed 5 seconds)
+    // Send announcement when player logs in
     // ============================================================
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         net.minecraft.server.level.ServerPlayer serverPlayer =
             (net.minecraft.server.level.ServerPlayer) event.getEntity();
+
         serverPlayer.getServer().tell(
             new net.minecraft.server.TickTask(
-                serverPlayer.getServer().getTickCount() + 100,
+                serverPlayer.getServer().getTickCount() + ModConfig.LOGIN_DELAY_TICKS,
                 () -> {
                     if (weekendBoostActive) {
-                        sendBoostMessage(serverPlayer, true);
-                        sendBoostTitle(serverPlayer);
+                        if (ModConfig.SHOW_MESSAGE) sendBoostMessage(serverPlayer, true);
+                        if (ModConfig.SHOW_BANNER)  sendBoostTitle(serverPlayer);
                     } else {
-                        sendNormalMessage(serverPlayer, true);
+                        if (ModConfig.SHOW_WEEKDAY_MESSAGE) sendNormalMessage(serverPlayer, true);
+                        if (ModConfig.SHOW_WEEKDAY_BANNER)  sendNormalTitle(serverPlayer);
                     }
                 }
             )
@@ -134,7 +136,7 @@ public class WeekendBoostEvents {
                 ModConfig.WEEKEND_EXP_MULTIPLIER,
                 ModConfig.WEEKEND_LUCKY_EGG
             );
-            broadcastBoostMessage(server);
+            if (ModConfig.SHOW_MESSAGE) broadcastBoostMessage(server);
             ticksSinceLastAnnounce = 0;
             weekdayTicksSinceLastAnnounce = 0;
         }
@@ -143,16 +145,18 @@ public class WeekendBoostEvents {
         if (isWeekend && wasActive) {
             ticksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
             if (ticksSinceLastAnnounce >= ModConfig.ANNOUNCE_INTERVAL_TICKS) {
-                broadcastBoostMessage(server);
+                if (ModConfig.SHOW_MESSAGE) broadcastBoostMessage(server);
                 ticksSinceLastAnnounce = 0;
             }
         }
 
-        // Weekday active - re-announce every 8 hours with toast sound, no ding
-        if (!isWeekend && wasActive == false) {
+        // Weekday active - re-announce every 8 hours with toast sound
+        if (!isWeekend && !wasActive) {
             weekdayTicksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
             if (weekdayTicksSinceLastAnnounce >= ModConfig.WEEKDAY_ANNOUNCE_TICKS) {
-                server.getPlayerList().getPlayers().forEach(p -> sendNormalMessage(p, false));
+                if (ModConfig.SHOW_WEEKDAY_MESSAGE) {
+                    server.getPlayerList().getPlayers().forEach(p -> sendNormalMessage(p, false));
+                }
                 weekdayTicksSinceLastAnnounce = 0;
             }
         }
@@ -206,7 +210,7 @@ public class WeekendBoostEvents {
     }
 
     private String getCountdownToWeekend() {
-        Calendar now = Calendar.getInstance();
+        Calendar now  = Calendar.getInstance();
         Calendar next = (Calendar) now.clone();
         int day = now.get(Calendar.DAY_OF_WEEK);
 
@@ -231,8 +235,15 @@ public class WeekendBoostEvents {
         return hours + "h " + minutes + "m";
     }
 
-    // Weekend message - isLogin true = levelup sound, false = XP orb sound
+    // Weekend chat message - isLogin true = levelup sound, false = XP orb sound
     private void sendBoostMessage(net.minecraft.world.entity.player.Player player, boolean isLogin) {
+        String line1 = ModConfig.CUSTOM_WEEKEND_LINE1.isEmpty()
+            ? "  All Pok\u00e9mon spawn rates, shiny chances, and EXP"
+            : "  " + ModConfig.CUSTOM_WEEKEND_LINE1;
+        String line2 = ModConfig.CUSTOM_WEEKEND_LINE2.isEmpty()
+            ? null
+            : "  " + ModConfig.CUSTOM_WEEKEND_LINE2;
+
         player.sendSystemMessage(Component.literal(""));
         player.sendSystemMessage(
             Component.literal("  \u2728 ")
@@ -242,16 +253,21 @@ public class WeekendBoostEvents {
                     .withStyle(s -> s.withColor(0xFFFF55)))
         );
         player.sendSystemMessage(
-            Component.literal("  All Pok\u00e9mon spawn rates, shiny chances, and EXP")
-                .withStyle(s -> s.withColor(0xAAAAAA))
+            Component.literal(line1).withStyle(s -> s.withColor(0xAAAAAA))
         );
-        player.sendSystemMessage(
-            Component.literal("  boosted by a minimum ")
-                .withStyle(s -> s.withColor(0xAAAAAA))
-                .append(Component.literal("x2").withStyle(s -> s.withColor(0x55FF55).withBold(true)))
-                .append(Component.literal(" this weekend. Good luck! \uD83C\uDF1F")
-                    .withStyle(s -> s.withColor(0xAAAAAA)))
-        );
+        if (line2 != null) {
+            player.sendSystemMessage(
+                Component.literal(line2).withStyle(s -> s.withColor(0xAAAAAA))
+            );
+        } else {
+            player.sendSystemMessage(
+                Component.literal("  boosted by a minimum ")
+                    .withStyle(s -> s.withColor(0xAAAAAA))
+                    .append(Component.literal("x2").withStyle(s -> s.withColor(0x55FF55).withBold(true)))
+                    .append(Component.literal(" this weekend. Good luck! \uD83C\uDF1F")
+                        .withStyle(s -> s.withColor(0xAAAAAA)))
+            );
+        }
         player.sendSystemMessage(Component.literal(""));
 
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
@@ -265,9 +281,16 @@ public class WeekendBoostEvents {
         }
     }
 
-    // Weekday message - isLogin true = pling sound, false = toast sound
+    // Weekday chat message - isLogin true = pling sound, false = toast sound
     private void sendNormalMessage(net.minecraft.world.entity.player.Player player, boolean isLogin) {
         String countdown = getCountdownToWeekend();
+        String line1 = ModConfig.CUSTOM_WEEKDAY_LINE1.isEmpty()
+            ? "  Boosted rates are active on Saturdays & Sundays. Next boost in: " + countdown
+            : "  " + ModConfig.CUSTOM_WEEKDAY_LINE1 + " " + countdown;
+        String line2 = ModConfig.CUSTOM_WEEKDAY_LINE2.isEmpty()
+            ? null
+            : "  " + ModConfig.CUSTOM_WEEKDAY_LINE2;
+
         player.sendSystemMessage(Component.literal(""));
         player.sendSystemMessage(
             Component.literal("  \uD83C\uDF19 ")
@@ -276,16 +299,29 @@ public class WeekendBoostEvents {
                 .append(Component.literal(" \uD83C\uDF19")
                     .withStyle(s -> s.withColor(0xAAAAAA)))
         );
-        player.sendSystemMessage(
-            Component.literal("  Boosted rates are active on ")
-                .withStyle(s -> s.withColor(0x777777))
-                .append(Component.literal("Saturdays & Sundays")
-                    .withStyle(s -> s.withColor(0x55FFFF).withBold(true)))
-                .append(Component.literal(". Next boost in: ")
-                    .withStyle(s -> s.withColor(0x777777)))
-                .append(Component.literal(countdown)
-                    .withStyle(s -> s.withColor(0x55FF55).withBold(true)))
-        );
+
+        if (ModConfig.CUSTOM_WEEKDAY_LINE1.isEmpty()) {
+            player.sendSystemMessage(
+                Component.literal("  Boosted rates are active on ")
+                    .withStyle(s -> s.withColor(0x777777))
+                    .append(Component.literal("Saturdays & Sundays")
+                        .withStyle(s -> s.withColor(0x55FFFF).withBold(true)))
+                    .append(Component.literal(". Next boost in: ")
+                        .withStyle(s -> s.withColor(0x777777)))
+                    .append(Component.literal(countdown)
+                        .withStyle(s -> s.withColor(0x55FF55).withBold(true)))
+            );
+        } else {
+            player.sendSystemMessage(
+                Component.literal(line1).withStyle(s -> s.withColor(0x777777))
+            );
+        }
+
+        if (line2 != null) {
+            player.sendSystemMessage(
+                Component.literal(line2).withStyle(s -> s.withColor(0x777777))
+            );
+        }
         player.sendSystemMessage(Component.literal(""));
 
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
@@ -299,6 +335,7 @@ public class WeekendBoostEvents {
         }
     }
 
+    // Weekend screen banner - login only
     private void sendBoostTitle(net.minecraft.server.level.ServerPlayer player) {
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
             Component.literal("\u2728 WEEKEND BOOST \u2728")
@@ -307,6 +344,21 @@ public class WeekendBoostEvents {
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(
             Component.literal("Boosted spawns, shinies & EXP all weekend!")
                 .withStyle(s -> s.withColor(0xFFFF55))
+        ));
+        player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(
+            10, 60, 20
+        ));
+    }
+
+    // Weekday screen banner - login only
+    private void sendNormalTitle(net.minecraft.server.level.ServerPlayer player) {
+        player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
+            Component.literal("\uD83C\uDF19 No Boost Active \uD83C\uDF19")
+                .withStyle(s -> s.withColor(0xAAAAAA).withBold(true))
+        ));
+        player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(
+            Component.literal("Next boost in: " + getCountdownToWeekend())
+                .withStyle(s -> s.withColor(0x55FFFF))
         ));
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(
             10, 60, 20

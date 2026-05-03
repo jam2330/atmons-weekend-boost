@@ -1,0 +1,56 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev' version '2.0.78'
+}
+
+version = '1.0.0'
+group = 'com.jam2330.weekendboost'
+
+base {
+    archivesName = 'atmons-weekend-boost'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+neoForge {
+    version = '21.1.226'
+
+    runs {
+        server {
+            server()
+            ideName = 'Server'
+        }
+    }
+
+    mods {
+        weekendboost {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+jar {
+    manifest {
+        attributes([
+            'Specification-Title'     : 'weekendboost',
+            'Specification-Vendor'    : 'jam2330',
+            'Specification-Version'   : '1',
+            'Implementation-Title'    : project.name,
+            'Implementation-Version'  : project.jar.archiveVersion,
+            'Implementation-Vendor'   : 'jam2330',
+        ])
+    }
+}

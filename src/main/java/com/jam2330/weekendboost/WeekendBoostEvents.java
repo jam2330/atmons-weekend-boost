@@ -18,12 +18,31 @@ public class WeekendBoostEvents {
     private int weekdayTicksSinceLastAnnounce = 0;
 
     // ============================================================
-    // Runs before server starts - writes spawner config
+    // Runs before server starts - loads config, disables KubeJS
+    // scripts, writes spawner config
     // ============================================================
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         WeekendBoost.LOGGER.info("Weekend Boost: onServerStarting fired!");
         ModConfig.loadOrCreate();
+
+        // ── KubeJS script disabling ──────────────────────────────
+        // Always runs first so pack updates can't sneak scripts back in.
+        // Each flag is independent — admins can re-enable either script
+        // by setting the flag to false in weekendboost.json.
+        if (ModConfig.DISABLE_CATCH_RESTRICTIONS) {
+            ConfigFileUtils.disableKubeJsScript("kubejs/startup_scripts/catch_restrictions.js");
+        }
+        if (ModConfig.DISABLE_MONS) {
+            ConfigFileUtils.disableKubeJsScript("kubejs/server_scripts/Tweaks/disable_mons.js");
+        }
+
+        // ── Weekend boost (spawner config) ───────────────────────
+        if (!ModConfig.WEEKEND_BOOST_ENABLED) {
+            WeekendBoost.LOGGER.info("Weekend Boost: weekend_boost_enabled is false — skipping boost logic");
+            return;
+        }
+
         Path configDir = Path.of("config");
         boolean isWeekend = isWeekend();
         weekendBoostActive = isWeekend;
@@ -56,6 +75,8 @@ public class WeekendBoostEvents {
     // ============================================================
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
+        if (!ModConfig.WEEKEND_BOOST_ENABLED) return;
+
         WeekendBoost.LOGGER.info("Weekend Boost: onServerStarted fired — applying main.json now");
         Path configDir = Path.of("config");
         boolean isWeekend = isWeekend();
@@ -85,6 +106,8 @@ public class WeekendBoostEvents {
     // ============================================================
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!ModConfig.NOTIFICATIONS_ENABLED) return;
+
         net.minecraft.server.level.ServerPlayer serverPlayer =
             (net.minecraft.server.level.ServerPlayer) event.getEntity();
 
@@ -109,6 +132,8 @@ public class WeekendBoostEvents {
     // ============================================================
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
+        if (!ModConfig.WEEKEND_BOOST_ENABLED) return;
+
         MinecraftServer server = event.getServer();
         long ticks = server.getTickCount();
         if (ticks % ModConfig.CHECK_INTERVAL_TICKS != 0) return;
@@ -119,7 +144,7 @@ public class WeekendBoostEvents {
 
         Path configDir = Path.of("config");
 
-        // Boost just turned ON (Friday -> Saturday)
+        // Boost just turned ON (Friday → Saturday)
         if (isWeekend && !wasActive) {
             ConfigFileUtils.writeSpawnerConfig(configDir,
                 ModConfig.buildSpawnerConfig(
@@ -136,7 +161,7 @@ public class WeekendBoostEvents {
                 ModConfig.WEEKEND_EXP_MULTIPLIER,
                 ModConfig.WEEKEND_LUCKY_EGG
             );
-            if (ModConfig.SHOW_MESSAGE) broadcastBoostMessage(server);
+            if (ModConfig.NOTIFICATIONS_ENABLED && ModConfig.SHOW_MESSAGE) broadcastBoostMessage(server);
             ticksSinceLastAnnounce = 0;
             weekdayTicksSinceLastAnnounce = 0;
         }
@@ -145,7 +170,7 @@ public class WeekendBoostEvents {
         if (isWeekend && wasActive) {
             ticksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
             if (ticksSinceLastAnnounce >= ModConfig.ANNOUNCE_INTERVAL_TICKS) {
-                if (ModConfig.SHOW_MESSAGE) broadcastBoostMessage(server);
+                if (ModConfig.NOTIFICATIONS_ENABLED && ModConfig.SHOW_MESSAGE) broadcastBoostMessage(server);
                 ticksSinceLastAnnounce = 0;
             }
         }
@@ -154,14 +179,14 @@ public class WeekendBoostEvents {
         if (!isWeekend && !wasActive) {
             weekdayTicksSinceLastAnnounce += ModConfig.CHECK_INTERVAL_TICKS;
             if (weekdayTicksSinceLastAnnounce >= ModConfig.WEEKDAY_ANNOUNCE_TICKS) {
-                if (ModConfig.SHOW_WEEKDAY_MESSAGE) {
+                if (ModConfig.NOTIFICATIONS_ENABLED && ModConfig.SHOW_WEEKDAY_MESSAGE) {
                     server.getPlayerList().getPlayers().forEach(p -> sendNormalMessage(p, false));
                 }
                 weekdayTicksSinceLastAnnounce = 0;
             }
         }
 
-        // Boost just turned OFF (Sunday -> Monday)
+        // Boost just turned OFF (Sunday → Monday)
         if (!isWeekend && wasActive) {
             ConfigFileUtils.writeSpawnerConfig(configDir,
                 ModConfig.buildSpawnerConfig(
@@ -178,24 +203,26 @@ public class WeekendBoostEvents {
                 ModConfig.NORMAL_EXP_MULTIPLIER,
                 ModConfig.NORMAL_LUCKY_EGG
             );
-            server.getPlayerList().getPlayers().forEach(p -> {
-                p.sendSystemMessage(Component.literal(""));
-                p.sendSystemMessage(
-                    Component.literal("  [ ")
-                        .append(Component.literal("Weekend Boost")
-                            .withStyle(s -> s.withColor(0xFFAA00).withBold(true)))
-                        .append(Component.literal(" ] "))
-                        .append(Component.literal(
-                            "The weekend boost has ended. Normal rates resume on next restart.")
-                            .withStyle(s -> s.withColor(0xAAAAAA)))
-                );
-                p.sendSystemMessage(Component.literal(""));
-                p.playNotifySound(
-                    net.minecraft.sounds.SoundEvents.FIREWORK_ROCKET_LAUNCH,
-                    net.minecraft.sounds.SoundSource.MASTER,
-                    1.0f, 1.0f
-                );
-            });
+            if (ModConfig.NOTIFICATIONS_ENABLED) {
+                server.getPlayerList().getPlayers().forEach(p -> {
+                    p.sendSystemMessage(Component.literal(""));
+                    p.sendSystemMessage(
+                        Component.literal("  \uD83C\uDF19 ")
+                            .append(Component.literal("Weekend Boost has ended.")
+                                .withStyle(s -> s.withColor(0xAAAAAA).withBold(true)))
+                    );
+                    p.sendSystemMessage(
+                        Component.literal("  Normal rates are now active. See you next weekend! \uD83C\uDF19")
+                            .withStyle(s -> s.withColor(0x777777))
+                    );
+                    p.sendSystemMessage(Component.literal(""));
+                    p.playNotifySound(
+                        net.minecraft.sounds.SoundEvents.FIREWORK_ROCKET_LAUNCH,
+                        net.minecraft.sounds.SoundSource.MASTER,
+                        1.0f, 1.0f
+                    );
+                });
+            }
             ticksSinceLastAnnounce = 0;
             weekdayTicksSinceLastAnnounce = 0;
         }

@@ -15,6 +15,44 @@ public class ConfigFileUtils {
     private static final Pattern EXP_MULTIPLIER_PATTERN    = Pattern.compile("\"experienceMultiplier\":\\s*[0-9.]+");
     private static final Pattern LUCKY_EGG_PATTERN         = Pattern.compile("\"luckyEggMultiplier\":\\s*[0-9.]+");
 
+    // ============================================================
+    // KubeJS script disabler
+    //
+    // Renames <scriptPath> → <scriptPath>.disabled so KubeJS never
+    // loads it.  Runs on every server start, so pack updates that
+    // restore the original .js file are neutralised automatically.
+    //
+    // If the .disabled version already exists the original is still
+    // renamed (overwriting the old .disabled copy) so the content
+    // stays in sync with whatever the pack last shipped.
+    // ============================================================
+    public static void disableKubeJsScript(String scriptPath) {
+        Path original = Path.of(scriptPath);
+        Path disabled = Path.of(scriptPath + ".disabled");
+
+        if (!Files.exists(original)) {
+            if (Files.exists(disabled)) {
+                // Already disabled from a previous boot — nothing to do
+                WeekendBoost.LOGGER.info("Weekend Boost: {} already disabled, skipping", scriptPath);
+            } else {
+                // Neither file exists — KubeJS probably hasn't generated it yet or the
+                // path is wrong; log a warning so the admin can check
+                WeekendBoost.LOGGER.warn("Weekend Boost: {} not found — is the path correct?", scriptPath);
+            }
+            return;
+        }
+
+        try {
+            Files.move(original, disabled, StandardCopyOption.REPLACE_EXISTING);
+            WeekendBoost.LOGGER.info("Weekend Boost: Disabled KubeJS script: {} → {}.disabled", scriptPath, scriptPath);
+        } catch (IOException e) {
+            WeekendBoost.LOGGER.error("Weekend Boost: Failed to disable KubeJS script: {}", scriptPath, e);
+        }
+    }
+
+    // ============================================================
+    // Spawner config writer (unchanged)
+    // ============================================================
     public static void writeSpawnerConfig(Path configDir, String content) {
         Path spawnerConfig = configDir.resolve("cobblemon/spawning/best-spawner-config.json");
         try {
@@ -27,6 +65,9 @@ public class ConfigFileUtils {
         }
     }
 
+    // ============================================================
+    // main.json patcher (unchanged)
+    // ============================================================
     public static void updateMainConfig(Path configDir, double shinyRate, double pokemonPerChunk,
                                         int maxSpawns, double expMultiplier, double luckyEgg) {
         Path mainConfig = configDir.resolve("cobblemon/main.json");

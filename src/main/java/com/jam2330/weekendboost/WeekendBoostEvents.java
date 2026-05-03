@@ -188,9 +188,9 @@ public class WeekendBoostEvents {
 
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             serverPlayer.connection.send(new net.minecraft.network.protocol.game.ClientboundSoundPacket(
-                net.minecraft.core.Holder.direct(net.minecraft.sounds.SoundEvent.createVariableRangeEvent(
-                    new net.minecraft.resources.ResourceLocation("minecraft", "entity.experience_orb.pickup")
-                )),
+                net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.wrapAsHolder(
+                    net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP
+                ),
                 net.minecraft.sounds.SoundSource.MASTER,
                 serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
                 1.0f, 1.0f, 0L

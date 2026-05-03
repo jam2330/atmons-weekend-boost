@@ -12,18 +12,6 @@ base {
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
-    withSourcesJar()
-}
-
-sourceSets {
-    main {
-        java {
-            srcDirs = ['src/main/java']
-        }
-        resources {
-            srcDirs = ['src/main/resources']
-        }
-    }
 }
 
 neoForge {
@@ -38,7 +26,6 @@ neoForge {
 
 repositories {
     mavenCentral()
-    maven { url = 'https://maven.neoforged.net/releases' }
 }
 
 dependencies {
@@ -47,19 +34,10 @@ dependencies {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.compilerArgs << '-Xlint:all'
 }
 
-jar {
-    from sourceSets.main.output
-    manifest {
-        attributes([
-            'Specification-Title'     : 'weekendboost',
-            'Specification-Vendor'    : 'jam2330',
-            'Specification-Version'   : '1',
-            'Implementation-Title'    : project.name,
-            'Implementation-Version'  : project.jar.archiveVersion,
-            'Implementation-Vendor'   : 'jam2330',
-        ])
-    }
+// Make sure compiled classes end up in the jar
+tasks.named('jar') {
+    from(sourceSets.main.output)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

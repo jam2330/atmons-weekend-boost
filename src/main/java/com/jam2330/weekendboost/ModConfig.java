@@ -1,13 +1,13 @@
 package com.jam2330.weekendboost;
 
-import com.google.gson.*;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import com.electronwill.nightconfig.core.file.CommentedFileConfig;
+import com.electronwill.nightconfig.core.io.WritingMode;
+
+import java.nio.file.Path;
 
 public class ModConfig {
-    private static final Path CONFIG_PATH = Path.of("config/weekendboost.json");
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+
+    private static final Path CONFIG_PATH = Path.of("config/weekendboost.toml");
 
     // Tick intervals
     public static int CHECK_INTERVAL_TICKS    = 1200;
@@ -61,170 +61,161 @@ public class ModConfig {
 
     public static void loadOrCreate() {
         try {
-            if (!Files.exists(CONFIG_PATH)) {
-                WeekendBoost.LOGGER.info("Weekend Boost: No config found, creating default weekendboost.json");
-                save();
-            } else {
-                load();
+            CommentedFileConfig config = CommentedFileConfig.builder(CONFIG_PATH.toFile())
+                .writingMode(WritingMode.REPLACE)
+                .build();
+
+            if (!CONFIG_PATH.toFile().exists()) {
+                WeekendBoost.LOGGER.info("Weekend Boost: No config found, creating default weekendboost.toml");
+                writeDefaults(config);
+                config.save();
+                config.close();
+                return;
             }
+
+            config.load();
+            readValues(config);
+            config.close();
+            WeekendBoost.LOGGER.info("Weekend Boost: Config loaded from weekendboost.toml");
+
         } catch (Exception e) {
             WeekendBoost.LOGGER.error("Weekend Boost: Failed to load config", e);
         }
     }
 
-    public static void load() throws IOException {
-        try (Reader reader = new InputStreamReader(
-                Files.newInputStream(CONFIG_PATH), StandardCharsets.UTF_8)) {
-            JsonObject obj = GSON.fromJson(reader, JsonObject.class);
-            if (obj == null) return;
+    private static void writeDefaults(CommentedFileConfig config) {
+        // Feature toggles
+        config.setComment("feature_toggles", " Master switches for the mod");
+        config.set("feature_toggles.weekend_boost_enabled", WEEKEND_BOOST_ENABLED);
+        config.setComment("feature_toggles.weekend_boost_enabled", " Master switch for all boost logic. Set false to disable the mod entirely");
+        config.set("feature_toggles.notifications_enabled", NOTIFICATIONS_ENABLED);
+        config.setComment("feature_toggles.notifications_enabled", " Master switch for all chat/banner/sound announcements");
 
-            if (obj.has("checkIntervalTicks"))       CHECK_INTERVAL_TICKS    = obj.get("checkIntervalTicks").getAsInt();
-            if (obj.has("announceIntervalTicks"))    ANNOUNCE_INTERVAL_TICKS = obj.get("announceIntervalTicks").getAsInt();
-            if (obj.has("weekdayAnnounceTicks"))     WEEKDAY_ANNOUNCE_TICKS  = obj.get("weekdayAnnounceTicks").getAsInt();
+        // KubeJS settings
+        config.setComment("kubejs_settings", " KubeJS script management");
+        config.set("kubejs_settings.disable_catch_restrictions", DISABLE_CATCH_RESTRICTIONS);
+        config.setComment("kubejs_settings.disable_catch_restrictions",
+            " Renames kubejs/startup_scripts/catch_restrictions.js to .disabled on every boot.\n" +
+            " Pack updates that restore the file are handled automatically.");
+        config.set("kubejs_settings.disable_mons", DISABLE_MONS);
+        config.setComment("kubejs_settings.disable_mons",
+            " Renames kubejs/server_scripts/Tweaks/disable_mons.js to .disabled on every boot.\n" +
+            " Pack updates that restore the file are handled automatically.");
 
-            if (obj.has("showBanner"))               SHOW_BANNER          = obj.get("showBanner").getAsBoolean();
-            if (obj.has("showMessage"))              SHOW_MESSAGE         = obj.get("showMessage").getAsBoolean();
-            if (obj.has("showWeekdayBanner"))        SHOW_WEEKDAY_BANNER  = obj.get("showWeekdayBanner").getAsBoolean();
-            if (obj.has("showWeekdayMessage"))       SHOW_WEEKDAY_MESSAGE = obj.get("showWeekdayMessage").getAsBoolean();
+        // Interval settings
+        config.setComment("interval_settings", " How often announcements are sent (20 ticks = 1 second)");
+        config.set("interval_settings.weekend_announce_interval_ticks", ANNOUNCE_INTERVAL_TICKS);
+        config.setComment("interval_settings.weekend_announce_interval_ticks", " Default: 432000 = 6 hours");
+        config.set("interval_settings.weekday_announce_interval_ticks", WEEKDAY_ANNOUNCE_TICKS);
+        config.setComment("interval_settings.weekday_announce_interval_ticks", " Default: 576000 = 8 hours");
 
-            if (obj.has("customWeekendLine1"))       CUSTOM_WEEKEND_LINE1 = obj.get("customWeekendLine1").getAsString();
-            if (obj.has("customWeekendLine2"))       CUSTOM_WEEKEND_LINE2 = obj.get("customWeekendLine2").getAsString();
-            if (obj.has("customWeekdayLine1"))       CUSTOM_WEEKDAY_LINE1 = obj.get("customWeekdayLine1").getAsString();
-            if (obj.has("customWeekdayLine2"))       CUSTOM_WEEKDAY_LINE2 = obj.get("customWeekdayLine2").getAsString();
+        // Notification settings
+        config.setComment("notification_settings", " Control which messages and banners are shown");
+        config.set("notification_settings.show_weekend_banner",   SHOW_BANNER);
+        config.setComment("notification_settings.show_weekend_banner", " Show title/subtitle banner on login during weekends");
+        config.set("notification_settings.show_weekend_message",  SHOW_MESSAGE);
+        config.setComment("notification_settings.show_weekend_message", " Show chat message on login during weekends");
+        config.set("notification_settings.show_weekday_banner",   SHOW_WEEKDAY_BANNER);
+        config.setComment("notification_settings.show_weekday_banner", " Show title/subtitle banner on login during weekdays");
+        config.set("notification_settings.show_weekday_message",  SHOW_WEEKDAY_MESSAGE);
+        config.setComment("notification_settings.show_weekday_message", " Show chat message on login during weekdays");
+        config.set("notification_settings.login_delay_ticks",     LOGIN_DELAY_TICKS);
+        config.setComment("notification_settings.login_delay_ticks", " Delay before showing login message. 20 ticks = 1 second. Default: 100 (5 seconds)");
 
-            if (obj.has("loginDelayTicks"))          LOGIN_DELAY_TICKS = obj.get("loginDelayTicks").getAsInt();
+        // Custom messages
+        config.setComment("custom_messages", " Override the default chat messages. Leave blank to use built-in defaults");
+        config.set("custom_messages.weekend_line1", CUSTOM_WEEKEND_LINE1);
+        config.setComment("custom_messages.weekend_line1", " First line of weekend chat message. Leave blank for default");
+        config.set("custom_messages.weekend_line2", CUSTOM_WEEKEND_LINE2);
+        config.setComment("custom_messages.weekend_line2", " Second line of weekend chat message. Leave blank for default");
+        config.set("custom_messages.weekday_line1", CUSTOM_WEEKDAY_LINE1);
+        config.setComment("custom_messages.weekday_line1", " First line of weekday chat message. Leave blank for default");
+        config.set("custom_messages.weekday_line2", CUSTOM_WEEKDAY_LINE2);
+        config.setComment("custom_messages.weekday_line2", " Second line of weekday chat message. Leave blank for default");
 
-            if (obj.has("normalShinyRate"))          NORMAL_SHINY_RATE        = obj.get("normalShinyRate").getAsDouble();
-            if (obj.has("normalPokemonPerChunk"))    NORMAL_POKEMON_PER_CHUNK = obj.get("normalPokemonPerChunk").getAsDouble();
-            if (obj.has("normalMaxSpawns"))          NORMAL_MAX_SPAWNS        = obj.get("normalMaxSpawns").getAsInt();
-            if (obj.has("normalExpMultiplier"))      NORMAL_EXP_MULTIPLIER    = obj.get("normalExpMultiplier").getAsDouble();
-            if (obj.has("normalLuckyEgg"))           NORMAL_LUCKY_EGG         = obj.get("normalLuckyEgg").getAsDouble();
-            if (obj.has("normalCommonWeight"))       NORMAL_COMMON_WEIGHT     = obj.get("normalCommonWeight").getAsDouble();
-            if (obj.has("normalUncommonWeight"))     NORMAL_UNCOMMON_WEIGHT   = obj.get("normalUncommonWeight").getAsDouble();
-            if (obj.has("normalRareWeight"))         NORMAL_RARE_WEIGHT       = obj.get("normalRareWeight").getAsDouble();
-            if (obj.has("normalUltraRareWeight"))    NORMAL_ULTRA_RARE_WEIGHT = obj.get("normalUltraRareWeight").getAsDouble();
+        // Weekday settings
+        config.setComment("weekday_settings", " Normal (weekday) Cobblemon values");
+        config.set("weekday_settings.shiny_rate",           NORMAL_SHINY_RATE);
+        config.setComment("weekday_settings.shiny_rate", " Higher = rarer shinies. Default: 8192 (1 in 8192 chance)");
+        config.set("weekday_settings.pokemon_per_chunk",    NORMAL_POKEMON_PER_CHUNK);
+        config.setComment("weekday_settings.pokemon_per_chunk", " How many Pokemon can spawn per chunk. Default: 1.0");
+        config.set("weekday_settings.max_spawns_per_pass",  NORMAL_MAX_SPAWNS);
+        config.setComment("weekday_settings.max_spawns_per_pass", " Max spawns checked per pass. Default: 8");
+        config.set("weekday_settings.exp_multiplier",       NORMAL_EXP_MULTIPLIER);
+        config.setComment("weekday_settings.exp_multiplier", " EXP gain multiplier. Default: 2.0");
+        config.set("weekday_settings.lucky_egg_multiplier", NORMAL_LUCKY_EGG);
+        config.setComment("weekday_settings.lucky_egg_multiplier", " Lucky Egg bonus multiplier. Default: 1.5");
+        config.set("weekday_settings.common_weight",        NORMAL_COMMON_WEIGHT);
+        config.setComment("weekday_settings.common_weight", " Spawn bucket weight for common tier. Higher = more likely");
+        config.set("weekday_settings.uncommon_weight",      NORMAL_UNCOMMON_WEIGHT);
+        config.setComment("weekday_settings.uncommon_weight", " Spawn bucket weight for uncommon tier");
+        config.set("weekday_settings.rare_weight",          NORMAL_RARE_WEIGHT);
+        config.setComment("weekday_settings.rare_weight", " Spawn bucket weight for rare tier");
+        config.set("weekday_settings.ultra_rare_weight",    NORMAL_ULTRA_RARE_WEIGHT);
+        config.setComment("weekday_settings.ultra_rare_weight", " Spawn bucket weight for ultra-rare tier. Default: 0.2");
 
-            if (obj.has("weekendShinyRate"))         WEEKEND_SHINY_RATE        = obj.get("weekendShinyRate").getAsDouble();
-            if (obj.has("weekendPokemonPerChunk"))   WEEKEND_POKEMON_PER_CHUNK = obj.get("weekendPokemonPerChunk").getAsDouble();
-            if (obj.has("weekendMaxSpawns"))         WEEKEND_MAX_SPAWNS        = obj.get("weekendMaxSpawns").getAsInt();
-            if (obj.has("weekendExpMultiplier"))     WEEKEND_EXP_MULTIPLIER    = obj.get("weekendExpMultiplier").getAsDouble();
-            if (obj.has("weekendLuckyEgg"))          WEEKEND_LUCKY_EGG         = obj.get("weekendLuckyEgg").getAsDouble();
-            if (obj.has("weekendCommonWeight"))      WEEKEND_COMMON_WEIGHT     = obj.get("weekendCommonWeight").getAsDouble();
-            if (obj.has("weekendUncommonWeight"))    WEEKEND_UNCOMMON_WEIGHT   = obj.get("weekendUncommonWeight").getAsDouble();
-            if (obj.has("weekendRareWeight"))        WEEKEND_RARE_WEIGHT       = obj.get("weekendRareWeight").getAsDouble();
-            if (obj.has("weekendUltraRareWeight"))   WEEKEND_ULTRA_RARE_WEIGHT = obj.get("weekendUltraRareWeight").getAsDouble();
-
-            // KubeJS settings
-            if (obj.has("kubejs_settings")) {
-                JsonObject kjs = obj.getAsJsonObject("kubejs_settings");
-                if (kjs.has("disable_catch_restrictions")) DISABLE_CATCH_RESTRICTIONS = kjs.get("disable_catch_restrictions").getAsBoolean();
-                if (kjs.has("disable_mons"))               DISABLE_MONS               = kjs.get("disable_mons").getAsBoolean();
-            }
-
-            // Feature toggles
-            if (obj.has("feature_toggles")) {
-                JsonObject ft = obj.getAsJsonObject("feature_toggles");
-                if (ft.has("weekend_boost_enabled")) WEEKEND_BOOST_ENABLED = ft.get("weekend_boost_enabled").getAsBoolean();
-                if (ft.has("notifications_enabled")) NOTIFICATIONS_ENABLED = ft.get("notifications_enabled").getAsBoolean();
-            }
-        }
+        // Weekend settings
+        config.setComment("weekend_settings", " Boosted (weekend) Cobblemon values");
+        config.set("weekend_settings.shiny_rate",           WEEKEND_SHINY_RATE);
+        config.setComment("weekend_settings.shiny_rate", " Higher = rarer shinies. Default: 2048 (4x more shinies than weekday)");
+        config.set("weekend_settings.pokemon_per_chunk",    WEEKEND_POKEMON_PER_CHUNK);
+        config.setComment("weekend_settings.pokemon_per_chunk", " How many Pokemon can spawn per chunk. Default: 3.0");
+        config.set("weekend_settings.max_spawns_per_pass",  WEEKEND_MAX_SPAWNS);
+        config.setComment("weekend_settings.max_spawns_per_pass", " Max spawns checked per pass. Default: 16");
+        config.set("weekend_settings.exp_multiplier",       WEEKEND_EXP_MULTIPLIER);
+        config.setComment("weekend_settings.exp_multiplier", " EXP gain multiplier. Default: 4.0");
+        config.set("weekend_settings.lucky_egg_multiplier", WEEKEND_LUCKY_EGG);
+        config.setComment("weekend_settings.lucky_egg_multiplier", " Lucky Egg bonus multiplier. Default: 3.0");
+        config.set("weekend_settings.common_weight",        WEEKEND_COMMON_WEIGHT);
+        config.setComment("weekend_settings.common_weight", " Spawn bucket weight for common tier");
+        config.set("weekend_settings.uncommon_weight",      WEEKEND_UNCOMMON_WEIGHT);
+        config.setComment("weekend_settings.uncommon_weight", " Spawn bucket weight for uncommon tier");
+        config.set("weekend_settings.rare_weight",          WEEKEND_RARE_WEIGHT);
+        config.setComment("weekend_settings.rare_weight", " Spawn bucket weight for rare tier");
+        config.set("weekend_settings.ultra_rare_weight",    WEEKEND_ULTRA_RARE_WEIGHT);
+        config.setComment("weekend_settings.ultra_rare_weight", " Spawn bucket weight for ultra-rare tier. Default: 5.0 (25x more than weekday)");
     }
 
-    public static void save() {
-        try {
-            Files.createDirectories(CONFIG_PATH.getParent());
-            JsonObject obj = new JsonObject();
+    private static void readValues(CommentedFileConfig config) {
+        WEEKEND_BOOST_ENABLED = config.getOrElse("feature_toggles.weekend_boost_enabled", WEEKEND_BOOST_ENABLED);
+        NOTIFICATIONS_ENABLED = config.getOrElse("feature_toggles.notifications_enabled", NOTIFICATIONS_ENABLED);
 
-            // Readme
-            JsonObject readme = new JsonObject();
-            readme.addProperty("about",
-                "ATMons Weekend Boost — config/weekendboost.json. Edit values and restart the server to apply.");
-            readme.addProperty("feature_toggles",
-                "weekend_boost_enabled: master switch for all boost logic. " +
-                "notifications_enabled: master switch for all chat/banner/sound announcements.");
-            readme.addProperty("kubejs_settings",
-                "disable_catch_restrictions: renames kubejs/startup_scripts/catch_restrictions.js to .disabled on every boot. " +
-                "disable_mons: renames kubejs/server_scripts/Tweaks/disable_mons.js to .disabled on every boot. " +
-                "Pack updates that restore these files are handled automatically.");
-            readme.addProperty("interval_settings",
-                "announceIntervalTicks: ticks between weekend re-announcements (default 432000 = 6 hours). " +
-                "weekdayAnnounceTicks: ticks between weekday re-announcements (default 576000 = 8 hours). " +
-                "20 ticks = 1 second.");
-            readme.addProperty("notification_settings",
-                "showBanner/showMessage: toggle weekend login banner and chat message. " +
-                "showWeekdayBanner/showWeekdayMessage: toggle weekday login banner and chat message. " +
-                "loginDelayTicks: delay before showing login message (default 100 = 5 seconds).");
-            readme.addProperty("custom_messages",
-                "Leave blank to use built-in defaults. " +
-                "customWeekendLine1/2: override weekend chat lines. customWeekdayLine1/2: override weekday chat lines.");
-            readme.addProperty("spawn_values",
-                "shinyRate: higher = rarer (default weekday 8192, weekend 2048). " +
-                "pokemonPerChunk: spawns per chunk (weekday 1.0, weekend 3.0). " +
-                "maxSpawns: max spawns per pass (weekday 8, weekend 16). " +
-                "expMultiplier: EXP gain multiplier. luckyEggMultiplier: Lucky Egg bonus. " +
-                "Bucket weights: higher = more likely for that rarity tier.");
-            obj.add("_readme", readme);
+        DISABLE_CATCH_RESTRICTIONS = config.getOrElse("kubejs_settings.disable_catch_restrictions", DISABLE_CATCH_RESTRICTIONS);
+        DISABLE_MONS               = config.getOrElse("kubejs_settings.disable_mons",               DISABLE_MONS);
 
-            // Feature toggles
-            JsonObject featureToggles = new JsonObject();
-            featureToggles.addProperty("weekend_boost_enabled", WEEKEND_BOOST_ENABLED);
-            featureToggles.addProperty("notifications_enabled", NOTIFICATIONS_ENABLED);
-            obj.add("feature_toggles", featureToggles);
+        ANNOUNCE_INTERVAL_TICKS = config.getOrElse("interval_settings.weekend_announce_interval_ticks", ANNOUNCE_INTERVAL_TICKS);
+        WEEKDAY_ANNOUNCE_TICKS  = config.getOrElse("interval_settings.weekday_announce_interval_ticks",  WEEKDAY_ANNOUNCE_TICKS);
 
-            // KubeJS settings
-            JsonObject kubejsSettings = new JsonObject();
-            kubejsSettings.addProperty("disable_catch_restrictions", DISABLE_CATCH_RESTRICTIONS);
-            kubejsSettings.addProperty("disable_mons",               DISABLE_MONS);
-            obj.add("kubejs_settings", kubejsSettings);
+        SHOW_BANNER          = config.getOrElse("notification_settings.show_weekend_banner",   SHOW_BANNER);
+        SHOW_MESSAGE         = config.getOrElse("notification_settings.show_weekend_message",  SHOW_MESSAGE);
+        SHOW_WEEKDAY_BANNER  = config.getOrElse("notification_settings.show_weekday_banner",   SHOW_WEEKDAY_BANNER);
+        SHOW_WEEKDAY_MESSAGE = config.getOrElse("notification_settings.show_weekday_message",  SHOW_WEEKDAY_MESSAGE);
+        LOGIN_DELAY_TICKS    = config.getOrElse("notification_settings.login_delay_ticks",     LOGIN_DELAY_TICKS);
 
-            // Interval settings
-            obj.addProperty("checkIntervalTicks",    CHECK_INTERVAL_TICKS);
-            obj.addProperty("announceIntervalTicks", ANNOUNCE_INTERVAL_TICKS);
-            obj.addProperty("weekdayAnnounceTicks",  WEEKDAY_ANNOUNCE_TICKS);
+        CUSTOM_WEEKEND_LINE1 = config.getOrElse("custom_messages.weekend_line1", CUSTOM_WEEKEND_LINE1);
+        CUSTOM_WEEKEND_LINE2 = config.getOrElse("custom_messages.weekend_line2", CUSTOM_WEEKEND_LINE2);
+        CUSTOM_WEEKDAY_LINE1 = config.getOrElse("custom_messages.weekday_line1", CUSTOM_WEEKDAY_LINE1);
+        CUSTOM_WEEKDAY_LINE2 = config.getOrElse("custom_messages.weekday_line2", CUSTOM_WEEKDAY_LINE2);
 
-            // Notification settings
-            obj.addProperty("showBanner",            SHOW_BANNER);
-            obj.addProperty("showMessage",           SHOW_MESSAGE);
-            obj.addProperty("showWeekdayBanner",     SHOW_WEEKDAY_BANNER);
-            obj.addProperty("showWeekdayMessage",    SHOW_WEEKDAY_MESSAGE);
-            obj.addProperty("loginDelayTicks",       LOGIN_DELAY_TICKS);
+        NORMAL_SHINY_RATE        = config.getOrElse("weekday_settings.shiny_rate",           NORMAL_SHINY_RATE);
+        NORMAL_POKEMON_PER_CHUNK = config.getOrElse("weekday_settings.pokemon_per_chunk",    NORMAL_POKEMON_PER_CHUNK);
+        NORMAL_MAX_SPAWNS        = config.getOrElse("weekday_settings.max_spawns_per_pass",  NORMAL_MAX_SPAWNS);
+        NORMAL_EXP_MULTIPLIER    = config.getOrElse("weekday_settings.exp_multiplier",       NORMAL_EXP_MULTIPLIER);
+        NORMAL_LUCKY_EGG         = config.getOrElse("weekday_settings.lucky_egg_multiplier", NORMAL_LUCKY_EGG);
+        NORMAL_COMMON_WEIGHT     = config.getOrElse("weekday_settings.common_weight",        NORMAL_COMMON_WEIGHT);
+        NORMAL_UNCOMMON_WEIGHT   = config.getOrElse("weekday_settings.uncommon_weight",      NORMAL_UNCOMMON_WEIGHT);
+        NORMAL_RARE_WEIGHT       = config.getOrElse("weekday_settings.rare_weight",          NORMAL_RARE_WEIGHT);
+        NORMAL_ULTRA_RARE_WEIGHT = config.getOrElse("weekday_settings.ultra_rare_weight",    NORMAL_ULTRA_RARE_WEIGHT);
 
-            // Custom messages
-            obj.addProperty("customWeekendLine1",    CUSTOM_WEEKEND_LINE1);
-            obj.addProperty("customWeekendLine2",    CUSTOM_WEEKEND_LINE2);
-            obj.addProperty("customWeekdayLine1",    CUSTOM_WEEKDAY_LINE1);
-            obj.addProperty("customWeekdayLine2",    CUSTOM_WEEKDAY_LINE2);
-
-            // Weekday values
-            obj.addProperty("normalShinyRate",       NORMAL_SHINY_RATE);
-            obj.addProperty("normalPokemonPerChunk", NORMAL_POKEMON_PER_CHUNK);
-            obj.addProperty("normalMaxSpawns",       NORMAL_MAX_SPAWNS);
-            obj.addProperty("normalExpMultiplier",   NORMAL_EXP_MULTIPLIER);
-            obj.addProperty("normalLuckyEgg",        NORMAL_LUCKY_EGG);
-            obj.addProperty("normalCommonWeight",    NORMAL_COMMON_WEIGHT);
-            obj.addProperty("normalUncommonWeight",  NORMAL_UNCOMMON_WEIGHT);
-            obj.addProperty("normalRareWeight",      NORMAL_RARE_WEIGHT);
-            obj.addProperty("normalUltraRareWeight", NORMAL_ULTRA_RARE_WEIGHT);
-
-            // Weekend values
-            obj.addProperty("weekendShinyRate",       WEEKEND_SHINY_RATE);
-            obj.addProperty("weekendPokemonPerChunk", WEEKEND_POKEMON_PER_CHUNK);
-            obj.addProperty("weekendMaxSpawns",       WEEKEND_MAX_SPAWNS);
-            obj.addProperty("weekendExpMultiplier",   WEEKEND_EXP_MULTIPLIER);
-            obj.addProperty("weekendLuckyEgg",        WEEKEND_LUCKY_EGG);
-            obj.addProperty("weekendCommonWeight",    WEEKEND_COMMON_WEIGHT);
-            obj.addProperty("weekendUncommonWeight",  WEEKEND_UNCOMMON_WEIGHT);
-            obj.addProperty("weekendRareWeight",      WEEKEND_RARE_WEIGHT);
-            obj.addProperty("weekendUltraRareWeight", WEEKEND_ULTRA_RARE_WEIGHT);
-
-            try (Writer writer = new OutputStreamWriter(
-                    Files.newOutputStream(CONFIG_PATH), StandardCharsets.UTF_8)) {
-                GSON.toJson(obj, writer);
-            }
-            WeekendBoost.LOGGER.info("Weekend Boost: Config saved to weekendboost.json");
-        } catch (IOException e) {
-            WeekendBoost.LOGGER.error("Weekend Boost: Failed to save config", e);
-        }
+        WEEKEND_SHINY_RATE        = config.getOrElse("weekend_settings.shiny_rate",           WEEKEND_SHINY_RATE);
+        WEEKEND_POKEMON_PER_CHUNK = config.getOrElse("weekend_settings.pokemon_per_chunk",    WEEKEND_POKEMON_PER_CHUNK);
+        WEEKEND_MAX_SPAWNS        = config.getOrElse("weekend_settings.max_spawns_per_pass",  WEEKEND_MAX_SPAWNS);
+        WEEKEND_EXP_MULTIPLIER    = config.getOrElse("weekend_settings.exp_multiplier",       WEEKEND_EXP_MULTIPLIER);
+        WEEKEND_LUCKY_EGG         = config.getOrElse("weekend_settings.lucky_egg_multiplier", WEEKEND_LUCKY_EGG);
+        WEEKEND_COMMON_WEIGHT     = config.getOrElse("weekend_settings.common_weight",        WEEKEND_COMMON_WEIGHT);
+        WEEKEND_UNCOMMON_WEIGHT   = config.getOrElse("weekend_settings.uncommon_weight",      WEEKEND_UNCOMMON_WEIGHT);
+        WEEKEND_RARE_WEIGHT       = config.getOrElse("weekend_settings.rare_weight",          WEEKEND_RARE_WEIGHT);
+        WEEKEND_ULTRA_RARE_WEIGHT = config.getOrElse("weekend_settings.ultra_rare_weight",    WEEKEND_ULTRA_RARE_WEIGHT);
     }
 
     public static String buildSpawnerConfig(double common, double uncommon,

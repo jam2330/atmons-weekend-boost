@@ -1,6 +1,6 @@
 package com.jam2330.weekendboost;
 
-import java.io.*;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.ArrayList;
@@ -32,13 +32,12 @@ public class ConfigFileUtils {
         Path mainConfig = configDir.resolve("cobblemon/main.json");
         try {
             if (!Files.exists(mainConfig)) {
-                WeekendBoost.LOGGER.warn("Weekend Boost: main.json not found at {}", mainConfig);
+                WeekendBoost.LOGGER.warn("Weekend Boost: main.json not found at {} — skipping, will apply on next restart", mainConfig);
                 return;
             }
 
             List<String> lines = Files.readAllLines(mainConfig, StandardCharsets.UTF_8);
             List<String> updated = new ArrayList<>();
-
             for (String line : lines) {
                 line = SHINY_RATE_PATTERN.matcher(line)
                     .replaceAll("\"shinyRate\": " + shinyRate);
@@ -56,6 +55,7 @@ public class ConfigFileUtils {
             Files.writeString(mainConfig, String.join("\n", updated), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             WeekendBoost.LOGGER.info("Weekend Boost: main.json updated successfully");
+
         } catch (IOException e) {
             WeekendBoost.LOGGER.error("Weekend Boost: failed to update main.json", e);
         }

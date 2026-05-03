@@ -28,16 +28,16 @@ jobs:
       run: gradle wrapper --gradle-version 8.8
 
     - name: Build mod
-      run: ./gradlew build --info
+      run: ./gradlew build
 
-    - name: List build outputs
-      run: find build/libs -type f -name "*.jar" -exec ls -lh {} \;
+    - name: List ALL build outputs
+      run: find build -name "*.jar" -exec ls -lh {} \;
 
     - name: Upload mod jar
       uses: actions/upload-artifact@v4
       with:
         name: atmons-weekend-boost
-        path: build/libs/atmons-weekend-boost-1.0.0.jar
+        path: build/libs/*.jar
         if-no-files-found: error
 
     - name: Create Release
@@ -46,7 +46,7 @@ jobs:
       with:
         tag_name: v1.0.${{ github.run_number }}
         name: ATMons Weekend Boost v1.0.${{ github.run_number }}
-        files: build/libs/atmons-weekend-boost-1.0.0.jar
+        files: build/libs/*.jar
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

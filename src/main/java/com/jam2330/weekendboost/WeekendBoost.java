@@ -4,6 +4,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -15,7 +16,11 @@ public class WeekendBoost {
 
     public WeekendBoost(IEventBus modEventBus) {
         modEventBus.addListener(this::setup);
-        NeoForge.EVENT_BUS.register(new WeekendBoostEvents());
+        WeekendBoostEvents events = new WeekendBoostEvents();
+        NeoForge.EVENT_BUS.register(events);
+        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent e) ->
+            WeekendBoostCommands.register(e.getDispatcher(), events)
+        );
     }
 
     private void setup(final FMLCommonSetupEvent event) {

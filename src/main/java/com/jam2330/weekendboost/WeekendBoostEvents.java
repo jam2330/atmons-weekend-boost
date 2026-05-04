@@ -8,6 +8,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Calendar;
 
@@ -16,20 +19,26 @@ public class WeekendBoostEvents {
     private boolean weekendBoostActive = false;
     private int ticksSinceLastAnnounce = 0;
     private int weekdayTicksSinceLastAnnounce = 0;
+    private boolean forceWeekend = false;
+    private boolean forceWeekday = false;
 
     // ============================================================
-    // Runs before server starts - loads config, disables KubeJS
-    // scripts, writes spawner config
+    // Public accessors for commands
+    // ============================================================
+    public boolean isWeekendPublic()               { return weekendBoostActive; }
+    public boolean isForcedPublic()                { return forceWeekend || forceWeekday; }
+    public void setForceWeekend(boolean value)     { this.forceWeekend = value; }
+    public void setForceWeekday(boolean value)     { this.forceWeekday = value; }
+    public String getCountdownPublic()             { return getCountdownToWeekend(); }
+
+    // ============================================================
+    // Runs before server starts - writes spawner config
     // ============================================================
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         WeekendBoost.LOGGER.info("Weekend Boost: onServerStarting fired!");
         ModConfig.loadOrCreate();
 
-        // ── KubeJS script disabling ──────────────────────────────
-        // Always runs first so pack updates can't sneak scripts back in.
-        // Each flag is independent — admins can re-enable either script
-        // by setting the flag to false in weekendboost.json.
         if (ModConfig.DISABLE_CATCH_RESTRICTIONS) {
             ConfigFileUtils.disableKubeJsScript("kubejs/startup_scripts/catch_restrictions.js");
         }
@@ -37,7 +46,6 @@ public class WeekendBoostEvents {
             ConfigFileUtils.disableKubeJsScript("kubejs/server_scripts/Tweaks/disable_mons.js");
         }
 
-        // ── Weekend boost (spawner config) ───────────────────────
         if (!ModConfig.WEEKEND_BOOST_ENABLED) {
             WeekendBoost.LOGGER.info("Weekend Boost: weekend_boost_enabled is false — skipping boost logic");
             return;
@@ -99,6 +107,8 @@ public class WeekendBoostEvents {
                 ModConfig.NORMAL_LUCKY_EGG
             );
         }
+
+        logConfigCheck(configDir);
     }
 
     // ============================================================
@@ -144,7 +154,7 @@ public class WeekendBoostEvents {
 
         Path configDir = Path.of("config");
 
-        // Boost just turned ON (Friday → Saturday)
+        // Boost just turned ON (Friday -> Saturday)
         if (isWeekend && !wasActive) {
             ConfigFileUtils.writeSpawnerConfig(configDir,
                 ModConfig.buildSpawnerConfig(
@@ -186,7 +196,7 @@ public class WeekendBoostEvents {
             }
         }
 
-        // Boost just turned OFF (Sunday → Monday)
+        // Boost just turned OFF (Sunday -> Monday)
         if (!isWeekend && wasActive) {
             ConfigFileUtils.writeSpawnerConfig(configDir,
                 ModConfig.buildSpawnerConfig(
@@ -232,11 +242,13 @@ public class WeekendBoostEvents {
     // Helpers
     // ============================================================
     private boolean isWeekend() {
+        if (forceWeekend) return true;
+        if (forceWeekday) return false;
         int day = Calendar.getInstance().get(Calendar.DAY_OF_WEEK);
         return day == Calendar.SATURDAY || day == Calendar.SUNDAY;
     }
 
-    private String getCountdownToWeekend() {
+    String getCountdownToWeekend() {
         Calendar now  = Calendar.getInstance();
         Calendar next = (Calendar) now.clone();
         int day = now.get(Calendar.DAY_OF_WEEK);
@@ -262,7 +274,6 @@ public class WeekendBoostEvents {
         return hours + "h " + minutes + "m";
     }
 
-    // Weekend chat message - isLogin true = levelup sound, false = XP orb sound
     private void sendBoostMessage(net.minecraft.world.entity.player.Player player, boolean isLogin) {
         String line1 = ModConfig.CUSTOM_WEEKEND_LINE1.isEmpty()
             ? "  All Pok\u00e9mon spawn rates, shiny chances, and EXP"
@@ -308,11 +319,10 @@ public class WeekendBoostEvents {
         }
     }
 
-    // Weekday chat message - isLogin true = pling sound, false = toast sound
     private void sendNormalMessage(net.minecraft.world.entity.player.Player player, boolean isLogin) {
         String countdown = getCountdownToWeekend();
         String line1 = ModConfig.CUSTOM_WEEKDAY_LINE1.isEmpty()
-            ? "  Boosted rates are active on Saturdays & Sundays. Next boost in: " + countdown
+            ? null
             : "  " + ModConfig.CUSTOM_WEEKDAY_LINE1 + " " + countdown;
         String line2 = ModConfig.CUSTOM_WEEKDAY_LINE2.isEmpty()
             ? null
@@ -327,7 +337,11 @@ public class WeekendBoostEvents {
                     .withStyle(s -> s.withColor(0xAAAAAA)))
         );
 
-        if (ModConfig.CUSTOM_WEEKDAY_LINE1.isEmpty()) {
+        if (line1 != null) {
+            player.sendSystemMessage(
+                Component.literal(line1).withStyle(s -> s.withColor(0x777777))
+            );
+        } else {
             player.sendSystemMessage(
                 Component.literal("  Boosted rates are active on ")
                     .withStyle(s -> s.withColor(0x777777))
@@ -337,10 +351,6 @@ public class WeekendBoostEvents {
                         .withStyle(s -> s.withColor(0x777777)))
                     .append(Component.literal(countdown)
                         .withStyle(s -> s.withColor(0x55FF55).withBold(true)))
-            );
-        } else {
-            player.sendSystemMessage(
-                Component.literal(line1).withStyle(s -> s.withColor(0x777777))
             );
         }
 
@@ -362,7 +372,6 @@ public class WeekendBoostEvents {
         }
     }
 
-    // Weekend screen banner - login only
     private void sendBoostTitle(net.minecraft.server.level.ServerPlayer player) {
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
             Component.literal("\u2728 WEEKEND BOOST \u2728")
@@ -377,7 +386,6 @@ public class WeekendBoostEvents {
         ));
     }
 
-    // Weekday screen banner - login only
     private void sendNormalTitle(net.minecraft.server.level.ServerPlayer player) {
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
             Component.literal("\uD83C\uDF19 No Boost Active \uD83C\uDF19")
@@ -394,5 +402,56 @@ public class WeekendBoostEvents {
 
     private void broadcastBoostMessage(MinecraftServer server) {
         server.getPlayerList().getPlayers().forEach(p -> sendBoostMessage(p, false));
+    }
+
+    private void logConfigCheck(Path configDir) {
+        WeekendBoost.LOGGER.info("=============================================================");
+        WeekendBoost.LOGGER.info("  ATMons Weekend Boost — Config Verification");
+        WeekendBoost.LOGGER.info("=============================================================");
+        WeekendBoost.LOGGER.info("  Mode: {}", weekendBoostActive ? "WEEKEND (boosted)" : "WEEKDAY (normal)");
+        WeekendBoost.LOGGER.info("  Weekend Boost Enabled: {}", ModConfig.WEEKEND_BOOST_ENABLED);
+        WeekendBoost.LOGGER.info("  Notifications Enabled: {}", ModConfig.NOTIFICATIONS_ENABLED);
+        WeekendBoost.LOGGER.info("-------------------------------------------------------------");
+
+        Path mainConfig = configDir.resolve("cobblemon/main.json");
+        if (!Files.exists(mainConfig)) {
+            WeekendBoost.LOGGER.warn("  main.json: NOT FOUND at {}", mainConfig.toAbsolutePath());
+        } else {
+            try {
+                String content = Files.readString(mainConfig, StandardCharsets.UTF_8);
+                double expectedShiny  = weekendBoostActive ? ModConfig.WEEKEND_SHINY_RATE        : ModConfig.NORMAL_SHINY_RATE;
+                double expectedChunk  = weekendBoostActive ? ModConfig.WEEKEND_POKEMON_PER_CHUNK  : ModConfig.NORMAL_POKEMON_PER_CHUNK;
+                int    expectedSpawns = weekendBoostActive ? ModConfig.WEEKEND_MAX_SPAWNS         : ModConfig.NORMAL_MAX_SPAWNS;
+                double expectedExp    = weekendBoostActive ? ModConfig.WEEKEND_EXP_MULTIPLIER     : ModConfig.NORMAL_EXP_MULTIPLIER;
+                double expectedEgg    = weekendBoostActive ? ModConfig.WEEKEND_LUCKY_EGG          : ModConfig.NORMAL_LUCKY_EGG;
+
+                logCheckValue(content, "shinyRate",           String.valueOf(expectedShiny),  "\"shinyRate\":\\s*([0-9.]+)");
+                logCheckValue(content, "pokemonPerChunk",      String.valueOf(expectedChunk),  "\"pokemonPerChunk\":\\s*([0-9.]+)");
+                logCheckValue(content, "maximumSpawnsPerPass", String.valueOf(expectedSpawns), "\"maximumSpawnsPerPass\":\\s*([0-9]+)");
+                logCheckValue(content, "experienceMultiplier", String.valueOf(expectedExp),    "\"experienceMultiplier\":\\s*([0-9.]+)");
+                logCheckValue(content, "luckyEggMultiplier",   String.valueOf(expectedEgg),    "\"luckyEggMultiplier\":\\s*([0-9.]+)");
+            } catch (IOException e) {
+                WeekendBoost.LOGGER.error("  main.json: Failed to read for verification", e);
+            }
+        }
+
+        Path spawnerConfig = configDir.resolve("cobblemon/spawning/best-spawner-config.json");
+        WeekendBoost.LOGGER.info("  best-spawner-config.json: {}",
+            Files.exists(spawnerConfig) ? "EXISTS ✔" : "NOT FOUND ✘");
+        WeekendBoost.LOGGER.info("=============================================================");
+    }
+
+    private void logCheckValue(String content, String fieldName, String expected, String pattern) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(pattern).matcher(content);
+        if (matcher.find()) {
+            String actual = matcher.group(1);
+            if (actual.equals(expected)) {
+                WeekendBoost.LOGGER.info("  {} = {} ✔", fieldName, actual);
+            } else {
+                WeekendBoost.LOGGER.warn("  {} = {} ✘ (expected {})", fieldName, actual, expected);
+            }
+        } else {
+            WeekendBoost.LOGGER.warn("  {}: field not found in main.json ✘", fieldName);
+        }
     }
 }

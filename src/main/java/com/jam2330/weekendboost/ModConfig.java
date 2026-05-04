@@ -1,9 +1,10 @@
 package com.jam2330.weekendboost;
 
 import com.electronwill.nightconfig.core.file.CommentedFileConfig;
-import com.electronwill.nightconfig.core.io.WritingMode;
 
-import java.nio.file.Path;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
 
 public class ModConfig {
 
@@ -61,20 +62,55 @@ public class ModConfig {
 
     public static void loadOrCreate() {
         try {
-            CommentedFileConfig config = CommentedFileConfig.builder(CONFIG_PATH.toFile())
-                .writingMode(WritingMode.REPLACE)
-                .build();
-
             if (!CONFIG_PATH.toFile().exists()) {
                 WeekendBoost.LOGGER.info("Weekend Boost: No config found, creating default weekendboost.toml");
-                writeDefaults(config);
-                config.save();
-                config.close();
+                saveDefault();
                 return;
             }
 
+            CommentedFileConfig config = CommentedFileConfig.builder(CONFIG_PATH.toFile()).build();
             config.load();
-            readValues(config);
+
+            WEEKEND_BOOST_ENABLED = config.getOrElse("feature_toggles.weekend_boost_enabled", WEEKEND_BOOST_ENABLED);
+            NOTIFICATIONS_ENABLED = config.getOrElse("feature_toggles.notifications_enabled", NOTIFICATIONS_ENABLED);
+
+            DISABLE_CATCH_RESTRICTIONS = config.getOrElse("kubejs_settings.disable_catch_restrictions", DISABLE_CATCH_RESTRICTIONS);
+            DISABLE_MONS               = config.getOrElse("kubejs_settings.disable_mons",               DISABLE_MONS);
+
+            ANNOUNCE_INTERVAL_TICKS = config.getOrElse("interval_settings.weekend_announce_interval_ticks", ANNOUNCE_INTERVAL_TICKS);
+            WEEKDAY_ANNOUNCE_TICKS  = config.getOrElse("interval_settings.weekday_announce_interval_ticks",  WEEKDAY_ANNOUNCE_TICKS);
+
+            SHOW_BANNER          = config.getOrElse("notification_settings.show_weekend_banner",   SHOW_BANNER);
+            SHOW_MESSAGE         = config.getOrElse("notification_settings.show_weekend_message",  SHOW_MESSAGE);
+            SHOW_WEEKDAY_BANNER  = config.getOrElse("notification_settings.show_weekday_banner",   SHOW_WEEKDAY_BANNER);
+            SHOW_WEEKDAY_MESSAGE = config.getOrElse("notification_settings.show_weekday_message",  SHOW_WEEKDAY_MESSAGE);
+            LOGIN_DELAY_TICKS    = config.getOrElse("notification_settings.login_delay_ticks",     LOGIN_DELAY_TICKS);
+
+            CUSTOM_WEEKEND_LINE1 = config.getOrElse("custom_messages.weekend_line1", CUSTOM_WEEKEND_LINE1);
+            CUSTOM_WEEKEND_LINE2 = config.getOrElse("custom_messages.weekend_line2", CUSTOM_WEEKEND_LINE2);
+            CUSTOM_WEEKDAY_LINE1 = config.getOrElse("custom_messages.weekday_line1", CUSTOM_WEEKDAY_LINE1);
+            CUSTOM_WEEKDAY_LINE2 = config.getOrElse("custom_messages.weekday_line2", CUSTOM_WEEKDAY_LINE2);
+
+            NORMAL_SHINY_RATE        = config.getOrElse("weekday_settings.shiny_rate",           NORMAL_SHINY_RATE);
+            NORMAL_POKEMON_PER_CHUNK = config.getOrElse("weekday_settings.pokemon_per_chunk",    NORMAL_POKEMON_PER_CHUNK);
+            NORMAL_MAX_SPAWNS        = config.getOrElse("weekday_settings.max_spawns_per_pass",  NORMAL_MAX_SPAWNS);
+            NORMAL_EXP_MULTIPLIER    = config.getOrElse("weekday_settings.exp_multiplier",       NORMAL_EXP_MULTIPLIER);
+            NORMAL_LUCKY_EGG         = config.getOrElse("weekday_settings.lucky_egg_multiplier", NORMAL_LUCKY_EGG);
+            NORMAL_COMMON_WEIGHT     = config.getOrElse("weekday_settings.common_weight",        NORMAL_COMMON_WEIGHT);
+            NORMAL_UNCOMMON_WEIGHT   = config.getOrElse("weekday_settings.uncommon_weight",      NORMAL_UNCOMMON_WEIGHT);
+            NORMAL_RARE_WEIGHT       = config.getOrElse("weekday_settings.rare_weight",          NORMAL_RARE_WEIGHT);
+            NORMAL_ULTRA_RARE_WEIGHT = config.getOrElse("weekday_settings.ultra_rare_weight",    NORMAL_ULTRA_RARE_WEIGHT);
+
+            WEEKEND_SHINY_RATE        = config.getOrElse("weekend_settings.shiny_rate",           WEEKEND_SHINY_RATE);
+            WEEKEND_POKEMON_PER_CHUNK = config.getOrElse("weekend_settings.pokemon_per_chunk",    WEEKEND_POKEMON_PER_CHUNK);
+            WEEKEND_MAX_SPAWNS        = config.getOrElse("weekend_settings.max_spawns_per_pass",  WEEKEND_MAX_SPAWNS);
+            WEEKEND_EXP_MULTIPLIER    = config.getOrElse("weekend_settings.exp_multiplier",       WEEKEND_EXP_MULTIPLIER);
+            WEEKEND_LUCKY_EGG         = config.getOrElse("weekend_settings.lucky_egg_multiplier", WEEKEND_LUCKY_EGG);
+            WEEKEND_COMMON_WEIGHT     = config.getOrElse("weekend_settings.common_weight",        WEEKEND_COMMON_WEIGHT);
+            WEEKEND_UNCOMMON_WEIGHT   = config.getOrElse("weekend_settings.uncommon_weight",      WEEKEND_UNCOMMON_WEIGHT);
+            WEEKEND_RARE_WEIGHT       = config.getOrElse("weekend_settings.rare_weight",          WEEKEND_RARE_WEIGHT);
+            WEEKEND_ULTRA_RARE_WEIGHT = config.getOrElse("weekend_settings.ultra_rare_weight",    WEEKEND_ULTRA_RARE_WEIGHT);
+
             config.close();
             WeekendBoost.LOGGER.info("Weekend Boost: Config loaded from weekendboost.toml");
 
@@ -83,139 +119,109 @@ public class ModConfig {
         }
     }
 
-    private static void writeDefaults(CommentedFileConfig config) {
-        // Feature toggles
-        config.setComment("feature_toggles", " Master switches for the mod");
-        config.set("feature_toggles.weekend_boost_enabled", WEEKEND_BOOST_ENABLED);
-        config.setComment("feature_toggles.weekend_boost_enabled", " Master switch for all boost logic. Set false to disable the mod entirely");
-        config.set("feature_toggles.notifications_enabled", NOTIFICATIONS_ENABLED);
-        config.setComment("feature_toggles.notifications_enabled", " Master switch for all chat/banner/sound announcements");
+    private static void saveDefault() throws IOException {
+        Files.createDirectories(CONFIG_PATH.getParent());
+        String toml =
+            "# =============================================================\n" +
+            "# ATMons Weekend Boost Configuration\n" +
+            "# Edit values and restart the server to apply changes.\n" +
+            "# =============================================================\n" +
+            "\n" +
+            "# ── Feature Toggles ───────────────────────────────────────────\n" +
+            "[feature_toggles]\n" +
+            "\t# Master switch for all boost logic. Set to false to disable the mod entirely.\n" +
+            "\tweekend_boost_enabled = " + WEEKEND_BOOST_ENABLED + "\n" +
+            "\t# Master switch for all chat messages, banners, and sounds.\n" +
+            "\tnotifications_enabled = " + NOTIFICATIONS_ENABLED + "\n" +
+            "\n" +
+            "# ── KubeJS Script Management ──────────────────────────────────\n" +
+            "# These options rename KubeJS scripts to .disabled on every boot,\n" +
+            "# preventing them from loading. Pack updates that restore the original\n" +
+            "# files are handled automatically — the mod re-disables them each restart.\n" +
+            "[kubejs_settings]\n" +
+            "\t# Disables: kubejs/startup_scripts/catch_restrictions.js\n" +
+            "\tdisable_catch_restrictions = " + DISABLE_CATCH_RESTRICTIONS + "\n" +
+            "\t# Disables: kubejs/server_scripts/Tweaks/disable_mons.js\n" +
+            "\tdisable_mons = " + DISABLE_MONS + "\n" +
+            "\n" +
+            "# ── Announcement Intervals ────────────────────────────────────\n" +
+            "# How often repeat announcements are sent while the server is running.\n" +
+            "# 20 ticks = 1 second, 72000 ticks = 1 hour.\n" +
+            "[interval_settings]\n" +
+            "\t# How often the weekend boost message is re-announced. Default: 432000 (6 hours)\n" +
+            "\tweekend_announce_interval_ticks = " + ANNOUNCE_INTERVAL_TICKS + "\n" +
+            "\t# How often the weekday no-boost message is re-announced. Default: 576000 (8 hours)\n" +
+            "\tweekday_announce_interval_ticks = " + WEEKDAY_ANNOUNCE_TICKS + "\n" +
+            "\n" +
+            "# ── Notification Settings ─────────────────────────────────────\n" +
+            "# Control which messages and banners are shown to players.\n" +
+            "[notification_settings]\n" +
+            "\t# Delay before showing login message/banner. 20 ticks = 1 second. Default: 100 (5 seconds)\n" +
+            "\tlogin_delay_ticks = " + LOGIN_DELAY_TICKS + "\n" +
+            "\t# Show title/subtitle screen banner on login during weekends.\n" +
+            "\tshow_weekend_banner = " + SHOW_BANNER + "\n" +
+            "\t# Show chat message on login during weekends.\n" +
+            "\tshow_weekend_message = " + SHOW_MESSAGE + "\n" +
+            "\t# Show title/subtitle screen banner on login during weekdays.\n" +
+            "\tshow_weekday_banner = " + SHOW_WEEKDAY_BANNER + "\n" +
+            "\t# Show chat message on login during weekdays.\n" +
+            "\tshow_weekday_message = " + SHOW_WEEKDAY_MESSAGE + "\n" +
+            "\n" +
+            "# ── Custom Messages ───────────────────────────────────────────\n" +
+            "# Override the default chat message lines.\n" +
+            "# Leave blank (\"\") to use the built-in defaults.\n" +
+            "[custom_messages]\n" +
+            "\t# Line 1 of the weekend chat message.\n" +
+            "\tweekend_line1 = \"" + CUSTOM_WEEKEND_LINE1 + "\"\n" +
+            "\t# Line 2 of the weekend chat message.\n" +
+            "\tweekend_line2 = \"" + CUSTOM_WEEKEND_LINE2 + "\"\n" +
+            "\t# Line 1 of the weekday chat message.\n" +
+            "\tweekday_line1 = \"" + CUSTOM_WEEKDAY_LINE1 + "\"\n" +
+            "\t# Line 2 of the weekday chat message.\n" +
+            "\tweekday_line2 = \"" + CUSTOM_WEEKDAY_LINE2 + "\"\n" +
+            "\n" +
+            "# ── Weekday Settings ──────────────────────────────────────────\n" +
+            "# Normal Cobblemon values applied Monday through Friday.\n" +
+            "[weekday_settings]\n" +
+            "\t# Shiny rate denominator. Higher = rarer. Default: 8192 (1 in 8192 chance)\n" +
+            "\tshiny_rate = " + NORMAL_SHINY_RATE + "\n" +
+            "\t# How many Pokemon can spawn per chunk. Default: 1.0\n" +
+            "\tpokemon_per_chunk = " + NORMAL_POKEMON_PER_CHUNK + "\n" +
+            "\t# Max spawns checked per pass. Default: 8\n" +
+            "\tmax_spawns_per_pass = " + NORMAL_MAX_SPAWNS + "\n" +
+            "\t# EXP gain multiplier. Default: 2.0\n" +
+            "\texp_multiplier = " + NORMAL_EXP_MULTIPLIER + "\n" +
+            "\t# Lucky Egg bonus multiplier. Default: 1.5\n" +
+            "\tlucky_egg_multiplier = " + NORMAL_LUCKY_EGG + "\n" +
+            "\t# Spawn bucket weights. Higher = more likely to pick that rarity tier.\n" +
+            "\tcommon_weight = " + NORMAL_COMMON_WEIGHT + "\n" +
+            "\tuncommon_weight = " + NORMAL_UNCOMMON_WEIGHT + "\n" +
+            "\trare_weight = " + NORMAL_RARE_WEIGHT + "\n" +
+            "\tultra_rare_weight = " + NORMAL_ULTRA_RARE_WEIGHT + "\n" +
+            "\n" +
+            "# ── Weekend Settings ──────────────────────────────────────────\n" +
+            "# Boosted Cobblemon values applied Saturday and Sunday.\n" +
+            "[weekend_settings]\n" +
+            "\t# Shiny rate denominator. Higher = rarer. Default: 2048 (4x more shinies than weekday)\n" +
+            "\tshiny_rate = " + WEEKEND_SHINY_RATE + "\n" +
+            "\t# How many Pokemon can spawn per chunk. Default: 3.0\n" +
+            "\tpokemon_per_chunk = " + WEEKEND_POKEMON_PER_CHUNK + "\n" +
+            "\t# Max spawns checked per pass. Default: 16\n" +
+            "\tmax_spawns_per_pass = " + WEEKEND_MAX_SPAWNS + "\n" +
+            "\t# EXP gain multiplier. Default: 4.0\n" +
+            "\texp_multiplier = " + WEEKEND_EXP_MULTIPLIER + "\n" +
+            "\t# Lucky Egg bonus multiplier. Default: 3.0\n" +
+            "\tlucky_egg_multiplier = " + WEEKEND_LUCKY_EGG + "\n" +
+            "\t# Spawn bucket weights. Higher = more likely to pick that rarity tier.\n" +
+            "\t# ultra_rare_weight of 5.0 vs weekday 0.2 = 25x more ultra-rare spawns!\n" +
+            "\tcommon_weight = " + WEEKEND_COMMON_WEIGHT + "\n" +
+            "\tuncommon_weight = " + WEEKEND_UNCOMMON_WEIGHT + "\n" +
+            "\trare_weight = " + WEEKEND_RARE_WEIGHT + "\n" +
+            "\tultra_rare_weight = " + WEEKEND_ULTRA_RARE_WEIGHT + "\n";
 
-        // KubeJS settings
-        config.setComment("kubejs_settings", " KubeJS script management");
-        config.set("kubejs_settings.disable_catch_restrictions", DISABLE_CATCH_RESTRICTIONS);
-        config.setComment("kubejs_settings.disable_catch_restrictions",
-            " Renames kubejs/startup_scripts/catch_restrictions.js to .disabled on every boot.\n" +
-            " Pack updates that restore the file are handled automatically.");
-        config.set("kubejs_settings.disable_mons", DISABLE_MONS);
-        config.setComment("kubejs_settings.disable_mons",
-            " Renames kubejs/server_scripts/Tweaks/disable_mons.js to .disabled on every boot.\n" +
-            " Pack updates that restore the file are handled automatically.");
-
-        // Interval settings
-        config.setComment("interval_settings", " How often announcements are sent (20 ticks = 1 second)");
-        config.set("interval_settings.weekend_announce_interval_ticks", ANNOUNCE_INTERVAL_TICKS);
-        config.setComment("interval_settings.weekend_announce_interval_ticks", " Default: 432000 = 6 hours");
-        config.set("interval_settings.weekday_announce_interval_ticks", WEEKDAY_ANNOUNCE_TICKS);
-        config.setComment("interval_settings.weekday_announce_interval_ticks", " Default: 576000 = 8 hours");
-
-        // Notification settings
-        config.setComment("notification_settings", " Control which messages and banners are shown");
-        config.set("notification_settings.show_weekend_banner",   SHOW_BANNER);
-        config.setComment("notification_settings.show_weekend_banner", " Show title/subtitle banner on login during weekends");
-        config.set("notification_settings.show_weekend_message",  SHOW_MESSAGE);
-        config.setComment("notification_settings.show_weekend_message", " Show chat message on login during weekends");
-        config.set("notification_settings.show_weekday_banner",   SHOW_WEEKDAY_BANNER);
-        config.setComment("notification_settings.show_weekday_banner", " Show title/subtitle banner on login during weekdays");
-        config.set("notification_settings.show_weekday_message",  SHOW_WEEKDAY_MESSAGE);
-        config.setComment("notification_settings.show_weekday_message", " Show chat message on login during weekdays");
-        config.set("notification_settings.login_delay_ticks",     LOGIN_DELAY_TICKS);
-        config.setComment("notification_settings.login_delay_ticks", " Delay before showing login message. 20 ticks = 1 second. Default: 100 (5 seconds)");
-
-        // Custom messages
-        config.setComment("custom_messages", " Override the default chat messages. Leave blank to use built-in defaults");
-        config.set("custom_messages.weekend_line1", CUSTOM_WEEKEND_LINE1);
-        config.setComment("custom_messages.weekend_line1", " First line of weekend chat message. Leave blank for default");
-        config.set("custom_messages.weekend_line2", CUSTOM_WEEKEND_LINE2);
-        config.setComment("custom_messages.weekend_line2", " Second line of weekend chat message. Leave blank for default");
-        config.set("custom_messages.weekday_line1", CUSTOM_WEEKDAY_LINE1);
-        config.setComment("custom_messages.weekday_line1", " First line of weekday chat message. Leave blank for default");
-        config.set("custom_messages.weekday_line2", CUSTOM_WEEKDAY_LINE2);
-        config.setComment("custom_messages.weekday_line2", " Second line of weekday chat message. Leave blank for default");
-
-        // Weekday settings
-        config.setComment("weekday_settings", " Normal (weekday) Cobblemon values");
-        config.set("weekday_settings.shiny_rate",           NORMAL_SHINY_RATE);
-        config.setComment("weekday_settings.shiny_rate", " Higher = rarer shinies. Default: 8192 (1 in 8192 chance)");
-        config.set("weekday_settings.pokemon_per_chunk",    NORMAL_POKEMON_PER_CHUNK);
-        config.setComment("weekday_settings.pokemon_per_chunk", " How many Pokemon can spawn per chunk. Default: 1.0");
-        config.set("weekday_settings.max_spawns_per_pass",  NORMAL_MAX_SPAWNS);
-        config.setComment("weekday_settings.max_spawns_per_pass", " Max spawns checked per pass. Default: 8");
-        config.set("weekday_settings.exp_multiplier",       NORMAL_EXP_MULTIPLIER);
-        config.setComment("weekday_settings.exp_multiplier", " EXP gain multiplier. Default: 2.0");
-        config.set("weekday_settings.lucky_egg_multiplier", NORMAL_LUCKY_EGG);
-        config.setComment("weekday_settings.lucky_egg_multiplier", " Lucky Egg bonus multiplier. Default: 1.5");
-        config.set("weekday_settings.common_weight",        NORMAL_COMMON_WEIGHT);
-        config.setComment("weekday_settings.common_weight", " Spawn bucket weight for common tier. Higher = more likely");
-        config.set("weekday_settings.uncommon_weight",      NORMAL_UNCOMMON_WEIGHT);
-        config.setComment("weekday_settings.uncommon_weight", " Spawn bucket weight for uncommon tier");
-        config.set("weekday_settings.rare_weight",          NORMAL_RARE_WEIGHT);
-        config.setComment("weekday_settings.rare_weight", " Spawn bucket weight for rare tier");
-        config.set("weekday_settings.ultra_rare_weight",    NORMAL_ULTRA_RARE_WEIGHT);
-        config.setComment("weekday_settings.ultra_rare_weight", " Spawn bucket weight for ultra-rare tier. Default: 0.2");
-
-        // Weekend settings
-        config.setComment("weekend_settings", " Boosted (weekend) Cobblemon values");
-        config.set("weekend_settings.shiny_rate",           WEEKEND_SHINY_RATE);
-        config.setComment("weekend_settings.shiny_rate", " Higher = rarer shinies. Default: 2048 (4x more shinies than weekday)");
-        config.set("weekend_settings.pokemon_per_chunk",    WEEKEND_POKEMON_PER_CHUNK);
-        config.setComment("weekend_settings.pokemon_per_chunk", " How many Pokemon can spawn per chunk. Default: 3.0");
-        config.set("weekend_settings.max_spawns_per_pass",  WEEKEND_MAX_SPAWNS);
-        config.setComment("weekend_settings.max_spawns_per_pass", " Max spawns checked per pass. Default: 16");
-        config.set("weekend_settings.exp_multiplier",       WEEKEND_EXP_MULTIPLIER);
-        config.setComment("weekend_settings.exp_multiplier", " EXP gain multiplier. Default: 4.0");
-        config.set("weekend_settings.lucky_egg_multiplier", WEEKEND_LUCKY_EGG);
-        config.setComment("weekend_settings.lucky_egg_multiplier", " Lucky Egg bonus multiplier. Default: 3.0");
-        config.set("weekend_settings.common_weight",        WEEKEND_COMMON_WEIGHT);
-        config.setComment("weekend_settings.common_weight", " Spawn bucket weight for common tier");
-        config.set("weekend_settings.uncommon_weight",      WEEKEND_UNCOMMON_WEIGHT);
-        config.setComment("weekend_settings.uncommon_weight", " Spawn bucket weight for uncommon tier");
-        config.set("weekend_settings.rare_weight",          WEEKEND_RARE_WEIGHT);
-        config.setComment("weekend_settings.rare_weight", " Spawn bucket weight for rare tier");
-        config.set("weekend_settings.ultra_rare_weight",    WEEKEND_ULTRA_RARE_WEIGHT);
-        config.setComment("weekend_settings.ultra_rare_weight", " Spawn bucket weight for ultra-rare tier. Default: 5.0 (25x more than weekday)");
-    }
-
-    private static void readValues(CommentedFileConfig config) {
-        WEEKEND_BOOST_ENABLED = config.getOrElse("feature_toggles.weekend_boost_enabled", WEEKEND_BOOST_ENABLED);
-        NOTIFICATIONS_ENABLED = config.getOrElse("feature_toggles.notifications_enabled", NOTIFICATIONS_ENABLED);
-
-        DISABLE_CATCH_RESTRICTIONS = config.getOrElse("kubejs_settings.disable_catch_restrictions", DISABLE_CATCH_RESTRICTIONS);
-        DISABLE_MONS               = config.getOrElse("kubejs_settings.disable_mons",               DISABLE_MONS);
-
-        ANNOUNCE_INTERVAL_TICKS = config.getOrElse("interval_settings.weekend_announce_interval_ticks", ANNOUNCE_INTERVAL_TICKS);
-        WEEKDAY_ANNOUNCE_TICKS  = config.getOrElse("interval_settings.weekday_announce_interval_ticks",  WEEKDAY_ANNOUNCE_TICKS);
-
-        SHOW_BANNER          = config.getOrElse("notification_settings.show_weekend_banner",   SHOW_BANNER);
-        SHOW_MESSAGE         = config.getOrElse("notification_settings.show_weekend_message",  SHOW_MESSAGE);
-        SHOW_WEEKDAY_BANNER  = config.getOrElse("notification_settings.show_weekday_banner",   SHOW_WEEKDAY_BANNER);
-        SHOW_WEEKDAY_MESSAGE = config.getOrElse("notification_settings.show_weekday_message",  SHOW_WEEKDAY_MESSAGE);
-        LOGIN_DELAY_TICKS    = config.getOrElse("notification_settings.login_delay_ticks",     LOGIN_DELAY_TICKS);
-
-        CUSTOM_WEEKEND_LINE1 = config.getOrElse("custom_messages.weekend_line1", CUSTOM_WEEKEND_LINE1);
-        CUSTOM_WEEKEND_LINE2 = config.getOrElse("custom_messages.weekend_line2", CUSTOM_WEEKEND_LINE2);
-        CUSTOM_WEEKDAY_LINE1 = config.getOrElse("custom_messages.weekday_line1", CUSTOM_WEEKDAY_LINE1);
-        CUSTOM_WEEKDAY_LINE2 = config.getOrElse("custom_messages.weekday_line2", CUSTOM_WEEKDAY_LINE2);
-
-        NORMAL_SHINY_RATE        = config.getOrElse("weekday_settings.shiny_rate",           NORMAL_SHINY_RATE);
-        NORMAL_POKEMON_PER_CHUNK = config.getOrElse("weekday_settings.pokemon_per_chunk",    NORMAL_POKEMON_PER_CHUNK);
-        NORMAL_MAX_SPAWNS        = config.getOrElse("weekday_settings.max_spawns_per_pass",  NORMAL_MAX_SPAWNS);
-        NORMAL_EXP_MULTIPLIER    = config.getOrElse("weekday_settings.exp_multiplier",       NORMAL_EXP_MULTIPLIER);
-        NORMAL_LUCKY_EGG         = config.getOrElse("weekday_settings.lucky_egg_multiplier", NORMAL_LUCKY_EGG);
-        NORMAL_COMMON_WEIGHT     = config.getOrElse("weekday_settings.common_weight",        NORMAL_COMMON_WEIGHT);
-        NORMAL_UNCOMMON_WEIGHT   = config.getOrElse("weekday_settings.uncommon_weight",      NORMAL_UNCOMMON_WEIGHT);
-        NORMAL_RARE_WEIGHT       = config.getOrElse("weekday_settings.rare_weight",          NORMAL_RARE_WEIGHT);
-        NORMAL_ULTRA_RARE_WEIGHT = config.getOrElse("weekday_settings.ultra_rare_weight",    NORMAL_ULTRA_RARE_WEIGHT);
-
-        WEEKEND_SHINY_RATE        = config.getOrElse("weekend_settings.shiny_rate",           WEEKEND_SHINY_RATE);
-        WEEKEND_POKEMON_PER_CHUNK = config.getOrElse("weekend_settings.pokemon_per_chunk",    WEEKEND_POKEMON_PER_CHUNK);
-        WEEKEND_MAX_SPAWNS        = config.getOrElse("weekend_settings.max_spawns_per_pass",  WEEKEND_MAX_SPAWNS);
-        WEEKEND_EXP_MULTIPLIER    = config.getOrElse("weekend_settings.exp_multiplier",       WEEKEND_EXP_MULTIPLIER);
-        WEEKEND_LUCKY_EGG         = config.getOrElse("weekend_settings.lucky_egg_multiplier", WEEKEND_LUCKY_EGG);
-        WEEKEND_COMMON_WEIGHT     = config.getOrElse("weekend_settings.common_weight",        WEEKEND_COMMON_WEIGHT);
-        WEEKEND_UNCOMMON_WEIGHT   = config.getOrElse("weekend_settings.uncommon_weight",      WEEKEND_UNCOMMON_WEIGHT);
-        WEEKEND_RARE_WEIGHT       = config.getOrElse("weekend_settings.rare_weight",          WEEKEND_RARE_WEIGHT);
-        WEEKEND_ULTRA_RARE_WEIGHT = config.getOrElse("weekend_settings.ultra_rare_weight",    WEEKEND_ULTRA_RARE_WEIGHT);
+        Files.writeString(CONFIG_PATH, toml, StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        WeekendBoost.LOGGER.info("Weekend Boost: Default config written to weekendboost.toml");
     }
 
     public static String buildSpawnerConfig(double common, double uncommon,

@@ -51,16 +51,13 @@ public class ModConfig {
     public static double WEEKEND_RARE_WEIGHT       = 8.0;
     public static double WEEKEND_ULTRA_RARE_WEIGHT = 5.0;
 
-    // ── KubeJS integration ──────────────────────────────────────────────────────
-    // When true the mod will rename the KubeJS script to .disabled on every
-    // server start, keeping it inactive even after a pack update restores it.
-    // Set to false if you want the vanilla ATM10 behaviour for that script.
+    // KubeJS integration
     public static boolean DISABLE_CATCH_RESTRICTIONS = true;
     public static boolean DISABLE_MONS               = true;
 
-    // ── Feature toggles ─────────────────────────────────────────────────────────
-    public static boolean WEEKEND_BOOST_ENABLED  = true;
-    public static boolean NOTIFICATIONS_ENABLED  = true;
+    // Feature toggles
+    public static boolean WEEKEND_BOOST_ENABLED = true;
+    public static boolean NOTIFICATIONS_ENABLED = true;
 
     public static void loadOrCreate() {
         try {
@@ -138,59 +135,67 @@ public class ModConfig {
             Files.createDirectories(CONFIG_PATH.getParent());
             JsonObject obj = new JsonObject();
 
-            // ── Readme ──────────────────────────────────────────────────────────────────
+            // Readme
             JsonObject readme = new JsonObject();
             readme.addProperty("about",
-                "ATMons Weekend Boost — config/weekendboost.json");
+                "ATMons Weekend Boost — config/weekendboost.json. Edit values and restart the server to apply.");
             readme.addProperty("feature_toggles",
                 "weekend_boost_enabled: master switch for all boost logic. " +
                 "notifications_enabled: master switch for all chat/banner/sound announcements.");
             readme.addProperty("kubejs_settings",
                 "disable_catch_restrictions: renames kubejs/startup_scripts/catch_restrictions.js to .disabled on every boot. " +
                 "disable_mons: renames kubejs/server_scripts/Tweaks/disable_mons.js to .disabled on every boot. " +
-                "Pack updates that restore these files are handled automatically — the mod re-disables them each restart.");
+                "Pack updates that restore these files are handled automatically.");
             readme.addProperty("interval_settings",
                 "announceIntervalTicks: ticks between weekend re-announcements (default 432000 = 6 hours). " +
-                "weekdayAnnounceTicks: ticks between weekday re-announcements (default 576000 = 8 hours).");
+                "weekdayAnnounceTicks: ticks between weekday re-announcements (default 576000 = 8 hours). " +
+                "20 ticks = 1 second.");
             readme.addProperty("notification_settings",
-                "showBanner/showMessage: weekend login banner and chat message. " +
-                "showWeekdayBanner/showWeekdayMessage: weekday login banner and chat message.");
+                "showBanner/showMessage: toggle weekend login banner and chat message. " +
+                "showWeekdayBanner/showWeekdayMessage: toggle weekday login banner and chat message. " +
+                "loginDelayTicks: delay before showing login message (default 100 = 5 seconds).");
             readme.addProperty("custom_messages",
-                "Leave blank to use the built-in defaults. " +
-                "weekend_line1/2: override weekend chat lines. weekday_line1/2: override weekday chat lines.");
+                "Leave blank to use built-in defaults. " +
+                "customWeekendLine1/2: override weekend chat lines. customWeekdayLine1/2: override weekday chat lines.");
+            readme.addProperty("spawn_values",
+                "shinyRate: higher = rarer (default weekday 8192, weekend 2048). " +
+                "pokemonPerChunk: spawns per chunk (weekday 1.0, weekend 3.0). " +
+                "maxSpawns: max spawns per pass (weekday 8, weekend 16). " +
+                "expMultiplier: EXP gain multiplier. luckyEggMultiplier: Lucky Egg bonus. " +
+                "Bucket weights: higher = more likely for that rarity tier.");
             obj.add("_readme", readme);
 
-            // ── Feature toggles ─────────────────────────────────────────────────────────
+            // Feature toggles
             JsonObject featureToggles = new JsonObject();
             featureToggles.addProperty("weekend_boost_enabled", WEEKEND_BOOST_ENABLED);
             featureToggles.addProperty("notifications_enabled", NOTIFICATIONS_ENABLED);
             obj.add("feature_toggles", featureToggles);
 
-            // ── KubeJS settings ──────────────────────────────────────────────────────────
+            // KubeJS settings
             JsonObject kubejsSettings = new JsonObject();
             kubejsSettings.addProperty("disable_catch_restrictions", DISABLE_CATCH_RESTRICTIONS);
-            kubejsSettings.addProperty("disable_mons", DISABLE_MONS);
+            kubejsSettings.addProperty("disable_mons",               DISABLE_MONS);
             obj.add("kubejs_settings", kubejsSettings);
 
-            // ── Interval settings ────────────────────────────────────────────────────────
+            // Interval settings
             obj.addProperty("checkIntervalTicks",    CHECK_INTERVAL_TICKS);
             obj.addProperty("announceIntervalTicks", ANNOUNCE_INTERVAL_TICKS);
             obj.addProperty("weekdayAnnounceTicks",  WEEKDAY_ANNOUNCE_TICKS);
 
-            // ── Notification settings ────────────────────────────────────────────────────
+            // Notification settings
             obj.addProperty("showBanner",            SHOW_BANNER);
             obj.addProperty("showMessage",           SHOW_MESSAGE);
             obj.addProperty("showWeekdayBanner",     SHOW_WEEKDAY_BANNER);
             obj.addProperty("showWeekdayMessage",    SHOW_WEEKDAY_MESSAGE);
             obj.addProperty("loginDelayTicks",       LOGIN_DELAY_TICKS);
 
-            // ── Custom messages ──────────────────────────────────────────────────────────
+            // Custom messages
             obj.addProperty("customWeekendLine1",    CUSTOM_WEEKEND_LINE1);
             obj.addProperty("customWeekendLine2",    CUSTOM_WEEKEND_LINE2);
             obj.addProperty("customWeekdayLine1",    CUSTOM_WEEKDAY_LINE1);
             obj.addProperty("customWeekdayLine2",    CUSTOM_WEEKDAY_LINE2);
 
-            // ── Weekday values ───────────────────────────────────────────────────────────
+            // Weekday values
             obj.addProperty("normalShinyRate",       NORMAL_SHINY_RATE);
             obj.addProperty("normalPokemonPerChunk", NORMAL_POKEMON_PER_CHUNK);
             obj.addProperty("normalMaxSpawns",       NORMAL_MAX_SPAWNS);
@@ -201,7 +206,7 @@ public class ModConfig {
             obj.addProperty("normalRareWeight",      NORMAL_RARE_WEIGHT);
             obj.addProperty("normalUltraRareWeight", NORMAL_ULTRA_RARE_WEIGHT);
 
-            // ── Weekend values ───────────────────────────────────────────────────────────
+            // Weekend values
             obj.addProperty("weekendShinyRate",       WEEKEND_SHINY_RATE);
             obj.addProperty("weekendPokemonPerChunk", WEEKEND_POKEMON_PER_CHUNK);
             obj.addProperty("weekendMaxSpawns",       WEEKEND_MAX_SPAWNS);
@@ -216,18 +221,21 @@ public class ModConfig {
                     Files.newOutputStream(CONFIG_PATH), StandardCharsets.UTF_8)) {
                 GSON.toJson(obj, writer);
             }
+            WeekendBoost.LOGGER.info("Weekend Boost: Config saved to weekendboost.json");
         } catch (IOException e) {
             WeekendBoost.LOGGER.error("Weekend Boost: Failed to save config", e);
         }
     }
 
-    // ── Spawner config builder (unchanged) ──────────────────────────────────────
-    public static String buildSpawnerConfig(double common, double uncommon, double rare, double ultraRare) {
-        return "{\n" +
-            "  \"commonWeight\": " + common + ",\n" +
-            "  \"uncommonWeight\": " + uncommon + ",\n" +
-            "  \"rareWeight\": " + rare + ",\n" +
-            "  \"ultraRareWeight\": " + ultraRare + "\n" +
-            "}\n";
+    public static String buildSpawnerConfig(double common, double uncommon,
+                                            double rare, double ultraRare) {
+        return "{\"version\":1,\"replaceWithNewVersion\":false," +
+            "\"spawnablePositionTypeWeights\":{\"grounded\":1.0,\"submerged\":1.0,\"surface\":1.0}," +
+            "\"buckets\":[" +
+            "{\"name\":\"common\",\"weight\":" + common + "}," +
+            "{\"name\":\"uncommon\",\"weight\":" + uncommon + "}," +
+            "{\"name\":\"rare\",\"weight\":" + rare + "}," +
+            "{\"name\":\"ultra-rare\",\"weight\":" + ultraRare + "}" +
+            "]}";
     }
 }

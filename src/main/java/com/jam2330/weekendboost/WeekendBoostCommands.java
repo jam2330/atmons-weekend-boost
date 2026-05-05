@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -276,7 +277,7 @@ public class WeekendBoostCommands {
     private static void sendAdminStatus(CommandSourceStack source, WeekendBoostEvents events) {
         boolean isWeekend = events.isWeekendPublic();
         boolean forced    = events.isForcedPublic();
-        Path configDir    = Path.of("config");
+        Path configDir    = FMLPaths.CONFIGDIR.get();
         Path mainConfig   = configDir.resolve("cobblemon/main.json");
 
         source.sendSuccess(() -> Component.literal(""), false);

@@ -1,6 +1,7 @@
 package com.jam2330.weekendboost;
 
 import com.electronwill.nightconfig.core.file.CommentedFileConfig;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -8,7 +9,7 @@ import java.nio.file.*;
 
 public class ModConfig {
 
-    private static final Path CONFIG_PATH = Path.of("config/weekendboost.toml");
+    private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("weekendboost.toml");
 
     // Tick intervals
     public static int CHECK_INTERVAL_TICKS    = 1200;

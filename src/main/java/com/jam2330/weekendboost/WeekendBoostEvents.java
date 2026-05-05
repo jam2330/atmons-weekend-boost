@@ -2,6 +2,7 @@ package com.jam2330.weekendboost;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -40,10 +41,10 @@ public class WeekendBoostEvents {
         ModConfig.loadOrCreate();
 
         if (ModConfig.DISABLE_CATCH_RESTRICTIONS) {
-            ConfigFileUtils.disableKubeJsScript("kubejs/startup_scripts/catch_restrictions.js");
+            ConfigFileUtils.disableKubeJsScript(FMLPaths.GAMEDIR.get().resolve("kubejs/startup_scripts/catch_restrictions.js").toString());
         }
         if (ModConfig.DISABLE_MONS) {
-            ConfigFileUtils.disableKubeJsScript("kubejs/server_scripts/Tweaks/disable_mons.js");
+            ConfigFileUtils.disableKubeJsScript(FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/Tweaks/disable_mons.js").toString());
         }
 
         if (!ModConfig.WEEKEND_BOOST_ENABLED) {
@@ -51,7 +52,7 @@ public class WeekendBoostEvents {
             return;
         }
 
-        Path configDir = Path.of("config");
+        Path configDir = FMLPaths.CONFIGDIR.get();
         boolean isWeekend = isWeekend();
         weekendBoostActive = isWeekend;
 
@@ -86,7 +87,7 @@ public class WeekendBoostEvents {
         if (!ModConfig.WEEKEND_BOOST_ENABLED) return;
 
         WeekendBoost.LOGGER.info("Weekend Boost: onServerStarted fired — applying main.json now");
-        Path configDir = Path.of("config");
+        Path configDir = FMLPaths.CONFIGDIR.get();
         boolean isWeekend = isWeekend();
         weekendBoostActive = isWeekend;
 
@@ -152,7 +153,7 @@ public class WeekendBoostEvents {
         boolean wasActive = weekendBoostActive;
         weekendBoostActive = isWeekend;
 
-        Path configDir = Path.of("config");
+        Path configDir = FMLPaths.CONFIGDIR.get();
 
         // Boost just turned ON (Friday -> Saturday)
         if (isWeekend && !wasActive) {
